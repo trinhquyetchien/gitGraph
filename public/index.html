@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Git Graph Local Viewer</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">LOCAL GIT DAG</p>
+          <h1>Git Graph Viewer</h1>
+          <p class="hero-copy">
+            Doc metadata Git tu repo local va ve commit graph dang node, branch, merge theo thoi gian.
+          </p>
+        </div>
+        <form id="repo-form" class="repo-form">
+          <label for="repo-path">Duong dan repo hoac .git</label>
+          <div class="repo-controls">
+            <input id="repo-path" name="repo" type="text" spellcheck="false" autocomplete="off" />
+            <button type="submit">Tai lai graph</button>
+          </div>
+        </form>
+      </header>
+
+      <main class="workspace">
+        <section class="panel panel-graph">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Graph</p>
+              <h2>Commit topology</h2>
+            </div>
+            <button id="refresh-button" class="ghost-button" type="button">Refresh</button>
+          </div>
+          <div id="status-banner" class="status-banner loading">Dang nap du lieu repo...</div>
+          <div id="repo-meta" class="repo-meta"></div>
+          <div id="graph-empty" class="graph-empty hidden">
+            Khong co commit de hien thi. Tao commit dau tien hoac chon mot repo khac.
+          </div>
+          <div id="graph-scroll" class="graph-scroll hidden">
+            <svg id="graph-svg" role="img" aria-label="Git commit graph"></svg>
+          </div>
+        </section>
+
+        <aside class="panel panel-details">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Commit</p>
+              <h2>Chi tiet</h2>
+            </div>
+          </div>
+          <div id="details-pane" class="details-pane">
+            <p>Chon mot node de xem hash, refs, author va parent commits.</p>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+  </html>

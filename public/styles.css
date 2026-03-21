@@ -1,0 +1,428 @@
+:root {
+  color-scheme: light;
+  --bg: #f4ede2;
+  --bg-strong: #efe2d1;
+  --surface: rgba(255, 251, 245, 0.88);
+  --surface-strong: rgba(255, 248, 239, 0.98);
+  --line: rgba(120, 78, 38, 0.18);
+  --text: #2f241a;
+  --text-soft: #6f5a49;
+  --accent: #b45309;
+  --accent-strong: #7c2d12;
+  --success: #2b8a3e;
+  --error: #c92a2a;
+  --shadow: 0 24px 80px rgba(89, 54, 21, 0.12);
+  --radius-lg: 28px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --font-display: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-body: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(217, 119, 6, 0.18), transparent 32%),
+    radial-gradient(circle at top right, rgba(29, 78, 216, 0.1), transparent 28%),
+    linear-gradient(180deg, #fbf5eb 0%, var(--bg) 100%);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.page-shell {
+  width: min(1520px, calc(100vw - 32px));
+  margin: 28px auto 36px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+  gap: 24px;
+  padding: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(140deg, rgba(255, 248, 238, 0.96), rgba(255, 250, 245, 0.84)),
+    linear-gradient(120deg, rgba(180, 83, 9, 0.08), transparent 52%);
+  box-shadow: var(--shadow);
+}
+
+.eyebrow,
+.panel-kicker,
+.meta-card p,
+.details-label {
+  margin: 0;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.76rem;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+}
+
+.hero h1,
+.panel-header h2,
+.details-card h3 {
+  margin: 0;
+  font-family: var(--font-display);
+}
+
+.hero h1 {
+  font-size: clamp(2.1rem, 4vw, 3.9rem);
+  line-height: 0.95;
+}
+
+.hero-copy {
+  max-width: 62ch;
+  margin: 16px 0 0;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--text-soft);
+}
+
+.repo-form {
+  align-self: end;
+  display: grid;
+  gap: 12px;
+  padding: 22px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 250, 243, 0.9);
+  border: 1px solid rgba(120, 78, 38, 0.15);
+}
+
+.repo-form label {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.repo-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.repo-controls input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 78, 38, 0.2);
+  background: white;
+  color: var(--text);
+}
+
+.repo-controls button,
+.ghost-button {
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: white;
+  cursor: pointer;
+  font-family: var(--font-display);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.ghost-button {
+  background: rgba(120, 78, 38, 0.09);
+  color: var(--text);
+}
+
+.repo-controls button:hover,
+.ghost-button:hover {
+  transform: translateY(-1px);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.75fr);
+  gap: 22px;
+  margin-top: 22px;
+}
+
+.panel {
+  min-height: 640px;
+  padding: 26px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.panel-header h2 {
+  font-size: 1.7rem;
+}
+
+.status-banner {
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  border: 1px solid transparent;
+}
+
+.status-banner.loading {
+  background: rgba(29, 78, 216, 0.08);
+  color: #1d4ed8;
+  border-color: rgba(29, 78, 216, 0.14);
+}
+
+.status-banner.success {
+  background: rgba(43, 138, 62, 0.08);
+  color: var(--success);
+  border-color: rgba(43, 138, 62, 0.16);
+}
+
+.status-banner.error {
+  background: rgba(201, 42, 42, 0.08);
+  color: var(--error);
+  border-color: rgba(201, 42, 42, 0.16);
+}
+
+.repo-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0 22px;
+}
+
+.meta-card {
+  min-height: 106px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  border: 1px solid rgba(120, 78, 38, 0.1);
+}
+
+.meta-card strong {
+  display: block;
+  margin-top: 16px;
+  line-height: 1.5;
+  word-break: break-word;
+  font-size: 0.95rem;
+}
+
+.graph-scroll {
+  overflow: auto;
+  border-radius: 24px;
+  border: 1px solid rgba(120, 78, 38, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.98), rgba(255, 247, 238, 0.9)),
+    repeating-linear-gradient(
+      180deg,
+      rgba(120, 78, 38, 0.03),
+      rgba(120, 78, 38, 0.03) 1px,
+      transparent 1px,
+      transparent 80px
+    );
+}
+
+#graph-svg {
+  display: block;
+}
+
+.graph-edge {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.92;
+}
+
+.commit-subject {
+  fill: var(--text);
+  font-size: 17px;
+  font-family: var(--font-display);
+}
+
+.commit-meta {
+  fill: var(--text-soft);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  font-family: var(--font-display);
+}
+
+.node-hit {
+  fill: rgba(255, 255, 255, 0);
+  stroke: none;
+}
+
+.node-core {
+  stroke: rgba(255, 251, 245, 0.95);
+  stroke-width: 4;
+}
+
+.node-center {
+  fill: rgba(255, 255, 255, 0.95);
+}
+
+.commit-node {
+  cursor: pointer;
+  transition: transform 160ms ease;
+}
+
+.commit-node.selected .node-core,
+.commit-node:hover .node-core {
+  filter: drop-shadow(0 0 10px rgba(180, 83, 9, 0.28));
+  stroke-width: 5;
+}
+
+.ref-tag-svg {
+  fill: rgba(120, 78, 38, 0.09);
+  stroke: rgba(120, 78, 38, 0.12);
+}
+
+.ref-tag-svg.branch {
+  fill: rgba(217, 72, 15, 0.13);
+}
+
+.ref-tag-svg.remote {
+  fill: rgba(28, 126, 214, 0.13);
+}
+
+.ref-tag-svg.tag {
+  fill: rgba(43, 138, 62, 0.13);
+}
+
+.ref-tag-svg.head {
+  fill: rgba(95, 61, 196, 0.13);
+}
+
+.ref-tag-text {
+  text-anchor: middle;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  font-family: var(--font-display);
+  fill: var(--text);
+}
+
+.graph-empty,
+.details-pane {
+  min-height: 260px;
+  padding: 24px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 248, 239, 0.8);
+  border: 1px dashed rgba(120, 78, 38, 0.18);
+  color: var(--text-soft);
+  line-height: 1.8;
+}
+
+.details-card {
+  display: grid;
+  gap: 16px;
+}
+
+.details-hash {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: #23170f;
+  color: #fff8ef;
+  overflow-wrap: anywhere;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.details-author,
+.details-time {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.details-group {
+  display: grid;
+  gap: 10px;
+}
+
+.ref-wrap,
+.parent-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ref-pill,
+.parent-wrap code {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(120, 78, 38, 0.09);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+}
+
+.ref-pill.branch {
+  background: rgba(217, 72, 15, 0.12);
+}
+
+.ref-pill.remote {
+  background: rgba(28, 126, 214, 0.12);
+}
+
+.ref-pill.tag {
+  background: rgba(43, 138, 62, 0.12);
+}
+
+.ref-pill.head {
+  background: rgba(95, 61, 196, 0.12);
+}
+
+.muted {
+  color: var(--text-soft);
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .hero,
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .repo-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .page-shell {
+    width: min(100vw - 18px, 100%);
+    margin: 10px auto 18px;
+  }
+
+  .hero,
+  .panel {
+    padding: 18px;
+  }
+
+  .repo-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .repo-meta {
+    grid-template-columns: 1fr;
+  }
+}
