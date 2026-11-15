@@ -1,0 +1,6 @@
+gitgraph
+*.exe
+*.tar.gz
+*.zip
+.cache/
+.DS_Store

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Git Graph
+GenericName=Git Repository & Commit Graph Viewer
+Comment=Explore Git commit graphs, branch topology, and inspect diffs
+Exec=/home/trinhquyetchien/.local/bin/gitgraph-launcher %F
+Icon=gitgraph
+Terminal=false
+Categories=Development;RevisionControl;Utility;
+Keywords=git;graph;log;diff;commit;repository;
+StartupNotify=true
+MimeType=inode/directory;
