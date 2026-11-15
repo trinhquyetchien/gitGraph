@@ -14,9 +14,9 @@ const LANE_COLORS = [
 
 const layout = {
   top: 40,
-  left: 64,
+  leftColWidth: 320, // Không gian bên trái dành cho Branch Names & Refs
   rowHeight: 64,
-  laneWidth: 44,
+  laneWidth: 40,
   bottom: 48
 };
 
@@ -229,9 +229,15 @@ function renderGraph(visibleCommits) {
 
   const maxColumn = Math.max(...visibleCommits.map((c) => c.column), 0);
   const laneBlockWidth = (maxColumn + 1) * layout.laneWidth;
-  const contentStartX = layout.left + laneBlockWidth + 24;
 
-  const width = Math.max(1200, contentStartX + 800);
+  // Biểu đồ nằm ở giữa:
+  // - Cột bên trái (leftColWidth): dành cho Branch Name & Ref Tags (căn phải về phía line)
+  // - Cột giữa (graphCenterX ...): chứa các đường Line DAG & Nodes
+  // - Cột bên phải (rightColX ...): chứa Commit Subject & Meta (Hash, Author, Date)
+  const graphStartX = layout.leftColWidth + 24;
+  const contentStartX = graphStartX + laneBlockWidth + 32;
+
+  const width = Math.max(1280, contentStartX + 800);
   const height = layout.top + (visibleCommits.length - 1) * layout.rowHeight + layout.bottom;
 
   graphSvg.innerHTML = "";
@@ -245,7 +251,7 @@ function renderGraph(visibleCommits) {
   const nodeLayer = createSvgNode("g", { class: "node-layer" });
 
   for (const commit of visibleCommits) {
-    const fromX = layout.left + commit.column * layout.laneWidth;
+    const fromX = graphStartX + commit.column * layout.laneWidth;
     const fromY = layout.top + commit.row * layout.rowHeight;
     const isSelected = commit.hash === state.selectedHash;
 
@@ -263,7 +269,7 @@ function renderGraph(visibleCommits) {
 
     // Thick prominent branch curves with dedicated colors per branch
     for (const [pIdx, parent] of commit.parentCommits.entries()) {
-      const toX = layout.left + parent.column * layout.laneWidth;
+      const toX = graphStartX + parent.column * layout.laneWidth;
       const toY = layout.top + parent.row * layout.rowHeight;
       const strokeColor = pIdx === 0 ? commit.color : parent.color;
 
@@ -276,35 +282,13 @@ function renderGraph(visibleCommits) {
       );
     }
 
-    // Branch Name Tag placed right next to the line/node:
-    // Hiển thị ở commit đầu nhánh hoặc commit chuyển giao nhánh (tránh lặp vô nghĩa mọi dòng)
-    const prevCommit = visibleCommits[commit.row - 1];
-    const isBranchStartOrChange =
-      commit.inferredBranch &&
-      (!prevCommit || prevCommit.inferredBranch !== commit.inferredBranch || prevCommit.column !== commit.column);
+    // --- CỘT BÊN TRÁI: Branch Name & Ref Tags (Căn về phía line đồ thị ở giữa) ---
+    let leftItemsEndX = graphStartX - 16;
 
-    if (isBranchStartOrChange) {
-      const branchLabel = createSvgNode("g", {
-        transform: `translate(${fromX - 16}, ${fromY})`,
-        class: "lane-branch-tag"
-      });
-
-      const bText = createSvgNode("text", {
-        x: -4,
-        y: 4,
-        class: "lane-branch-text",
-        fill: commit.color
-      });
-      bText.textContent = commit.inferredBranch;
-      branchLabel.append(bText);
-      labelLayer.append(branchLabel);
-    }
-
-    // Ref Badges (Pill style with icons)
-    let currentContentX = contentStartX;
+    // Ref Badges (xếp từ phải qua trái)
     if (commit.refs.length > 0) {
-      let badgeX = contentStartX;
-      for (const ref of commit.refs) {
+      let curRefRightX = leftItemsEndX;
+      for (const ref of [...commit.refs].reverse()) {
         let prefixIcon = "";
         if (ref.type === "branch" || ref.type === "head") {
           prefixIcon = "⑂ ";
@@ -317,13 +301,13 @@ function renderGraph(visibleCommits) {
         const displayText = prefixIcon + ref.shortName;
         const textLen = displayText.length;
         const pillWidth = Math.max(54, textLen * 7.2 + 18);
+        const badgeX = curRefRightX - pillWidth;
 
         const refGroup = createSvgNode("g", {
           transform: `translate(${badgeX}, ${fromY - 21})`,
           class: `ref-tag-group ${ref.type}`
         });
 
-        // Pill background
         refGroup.append(
           createSvgNode("rect", {
             width: pillWidth,
@@ -333,7 +317,6 @@ function renderGraph(visibleCommits) {
           })
         );
 
-        // Pill label
         const refText = createSvgNode("text", {
           x: pillWidth / 2,
           y: 12,
@@ -343,14 +326,38 @@ function renderGraph(visibleCommits) {
         refGroup.append(refText);
         labelLayer.append(refGroup);
 
-        badgeX += pillWidth + 8;
+        curRefRightX = badgeX - 8;
       }
-      currentContentX = badgeX + 8;
+      leftItemsEndX = curRefRightX;
+    } else {
+      // Nếu commit không có ref trực tiếp, hiển thị tên nhánh ngầm suy luận ở bên trái
+      const prevCommit = visibleCommits[commit.row - 1];
+      const isBranchStartOrChange =
+        commit.inferredBranch &&
+        (!prevCommit || prevCommit.inferredBranch !== commit.inferredBranch || prevCommit.column !== commit.column);
+
+      if (isBranchStartOrChange) {
+        const branchLabel = createSvgNode("g", {
+          transform: `translate(${leftItemsEndX}, ${fromY})`,
+          class: "lane-branch-tag"
+        });
+
+        const bText = createSvgNode("text", {
+          x: 0,
+          y: 4,
+          class: "lane-branch-text",
+          fill: commit.color
+        });
+        bText.textContent = commit.inferredBranch;
+        branchLabel.append(bText);
+        labelLayer.append(branchLabel);
+      }
     }
 
+    // --- CỘT BÊN PHẢI: Commit Subject & Meta ---
     // Subject
     const subject = createSvgNode("text", {
-      x: currentContentX,
+      x: contentStartX,
       y: fromY - 6,
       class: "commit-subject"
     });
@@ -359,7 +366,7 @@ function renderGraph(visibleCommits) {
 
     // Meta (shortHash • Author • Date)
     const meta = createSvgNode("text", {
-      x: currentContentX,
+      x: contentStartX,
       y: fromY + 14,
       class: "commit-meta"
     });
