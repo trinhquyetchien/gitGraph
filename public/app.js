@@ -310,9 +310,10 @@ function renderGraph(visibleCommits) {
     meta.textContent = `${commit.shortHash} • ${commit.authorName} • ${dateStr}`;
     labelLayer.append(meta);
 
-    // Big Clear Commit Node
+    // Commit Node Group (Regular Circle vs Merge Diamond)
+    const isMerge = commit.parents && commit.parents.length > 1;
     const nodeGroup = createSvgNode("g", {
-      class: `commit-node ${isSelected ? "selected" : ""}`,
+      class: `commit-node ${isMerge ? "merge-node" : "regular-node"} ${isSelected ? "selected" : ""}`,
       "data-hash": commit.hash
     });
 
@@ -326,27 +327,50 @@ function renderGraph(visibleCommits) {
       })
     );
 
-    // Node Outer Ring
-    nodeGroup.append(
-      createSvgNode("circle", {
-        cx: fromX,
-        cy: fromY,
-        r: 8.5,
-        stroke: commit.color,
-        class: "node-outer"
-      })
-    );
+    if (isMerge) {
+      // ◈ MERGE COMMIT: Hình thoi Diamond viền đôi sang trọng
+      const dSize = 9;
+      const dInner = 5.5;
 
-    // Node Solid Core
-    nodeGroup.append(
-      createSvgNode("circle", {
-        cx: fromX,
-        cy: fromY,
-        r: 5.5,
-        fill: commit.color,
-        class: "node-inner"
-      })
-    );
+      // Outer diamond ring
+      nodeGroup.append(
+        createSvgNode("polygon", {
+          points: `${fromX},${fromY - dSize} ${fromX + dSize},${fromY} ${fromX},${fromY + dSize} ${fromX - dSize},${fromY}`,
+          stroke: commit.color,
+          class: "node-outer merge-diamond"
+        })
+      );
+
+      // Inner solid diamond
+      nodeGroup.append(
+        createSvgNode("polygon", {
+          points: `${fromX},${fromY - dInner} ${fromX + dInner},${fromY} ${fromX},${fromY + dInner} ${fromX - dInner},${fromY}`,
+          fill: commit.color,
+          class: "node-inner merge-diamond-core"
+        })
+      );
+    } else {
+      // ● REGULAR COMMIT: Hình tròn tiêu chuẩn
+      nodeGroup.append(
+        createSvgNode("circle", {
+          cx: fromX,
+          cy: fromY,
+          r: 8.5,
+          stroke: commit.color,
+          class: "node-outer"
+        })
+      );
+
+      nodeGroup.append(
+        createSvgNode("circle", {
+          cx: fromX,
+          cy: fromY,
+          r: 5.5,
+          fill: commit.color,
+          class: "node-inner"
+        })
+      );
+    }
 
     nodeGroup.addEventListener("click", () => selectCommit(commit.hash));
     nodeLayer.append(nodeGroup);
@@ -383,9 +407,15 @@ async function renderCommitDetails(commit) {
 
   selectedShortHash.textContent = commit.shortHash;
 
+  const isMerge = commit.parents && commit.parents.length > 1;
+  const mergeBadge = isMerge ? `<span class="badge-merge">MERGE</span>` : "";
+
   inspectorContent.innerHTML = `
-    <div class="commit-card">
-      <div class="commit-title">${escapeHtml(commit.subject)}</div>
+    <div class="commit-card ${isMerge ? 'is-merge' : ''}">
+      <div class="commit-title-row">
+        <div class="commit-title">${escapeHtml(commit.subject)}</div>
+        ${mergeBadge}
+      </div>
       <div class="commit-meta-row">
         <span>Tác giả: <strong>${escapeHtml(commit.authorName)}</strong> &lt;${escapeHtml(commit.authorEmail)}&gt;</span>
       </div>
