@@ -374,7 +374,6 @@ body {
 .node-inner {
   stroke: #ffffff;
   stroke-width: 2px;
-  transition: transform 0.15s ease;
 }
 
 /* Merge Diamond Shape Styling */
@@ -388,15 +387,9 @@ body {
   stroke-width: 2px;
 }
 
-.commit-node:hover .node-inner {
-  transform: scale(1.25);
-  transform-origin: center;
-}
-
 .commit-node.selected .node-outer {
-  stroke-width: 4.5px;
+  stroke-width: 4px;
   opacity: 1;
-  filter: drop-shadow(0 0 6px currentColor);
 }
 
 .commit-title-row {
@@ -436,12 +429,6 @@ body {
 /* Ref Tag SVG */
 .ref-tag-group {
   cursor: pointer;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
-  transition: transform var(--transition-fast);
-}
-
-.ref-tag-group:hover {
-  transform: translateY(-1px);
 }
 
 .ref-tag-svg {

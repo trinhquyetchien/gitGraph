@@ -255,7 +255,8 @@ function renderGraph(visibleCommits) {
       y: fromY - layout.rowHeight / 2,
       width: width,
       height: layout.rowHeight,
-      class: `commit-row-bg ${isSelected ? "selected" : ""}`
+      class: `commit-row-bg ${isSelected ? "selected" : ""}`,
+      "data-hash": commit.hash
     });
     rowBg.addEventListener("click", () => selectCommit(commit.hash));
     rowBgLayer.append(rowBg);
@@ -275,8 +276,14 @@ function renderGraph(visibleCommits) {
       );
     }
 
-    // Branch Name Tag placed right next to the line/node
-    if (commit.inferredBranch) {
+    // Branch Name Tag placed right next to the line/node:
+    // Hiển thị ở commit đầu nhánh hoặc commit chuyển giao nhánh (tránh lặp vô nghĩa mọi dòng)
+    const prevCommit = visibleCommits[commit.row - 1];
+    const isBranchStartOrChange =
+      commit.inferredBranch &&
+      (!prevCommit || prevCommit.inferredBranch !== commit.inferredBranch || prevCommit.column !== commit.column);
+
+    if (isBranchStartOrChange) {
       const branchLabel = createSvgNode("g", {
         transform: `translate(${fromX - 16}, ${fromY})`,
         class: "lane-branch-tag"
@@ -630,9 +637,21 @@ async function renderCommitDetails(commit) {
 }
 
 function selectCommit(hash) {
+  if (state.selectedHash === hash) return;
   state.selectedHash = hash;
+
+  // Cập nhật class selected trực tiếp trên DOM mà không cần vẽ lại toàn bộ SVG
+  const prevBg = graphSvg.querySelector(".commit-row-bg.selected");
+  if (prevBg) prevBg.classList.remove("selected");
+  const prevNode = graphSvg.querySelector(".commit-node.selected");
+  if (prevNode) prevNode.classList.remove("selected");
+
+  const newBg = graphSvg.querySelector(`.commit-row-bg[data-hash="${hash}"]`);
+  if (newBg) newBg.classList.add("selected");
+  const newNode = graphSvg.querySelector(`.commit-node[data-hash="${hash}"]`);
+  if (newNode) newNode.classList.add("selected");
+
   const visible = getVisibleCommits(state.data);
-  renderGraph(visible);
   const commit = visible.find((c) => c.hash === hash);
   renderCommitDetails(commit);
 }
