@@ -447,8 +447,6 @@ function renderGraph(visibleCommits) {
 
   graphSvg.append(rowBgLayer, edgeLayer, labelLayer, nodeLayer);
 }
-}
-}
 
 /**
  * Parse git diff text into per-file structured chunks with line numbers
