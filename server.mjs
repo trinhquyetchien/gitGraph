@@ -428,6 +428,12 @@ const server = http.createServer(async (request, response) => {
   await serveStatic(response, url.pathname);
 });
 
-server.listen(port, host, () => {
-  console.log(`Git Graph Web Viewer is running at http://${host}:${port}`);
-});
+// Export methods for static site generation / CI export
+export { loadRepoData, loadCommitDiff };
+
+const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMainModule) {
+  server.listen(port, host, () => {
+    console.log(`Git Graph Web Viewer is running at http://${host}:${port}`);
+  });
+}
