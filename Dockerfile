@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Cài đặt git trên môi trường Alpine Linux
-RUN apk add --no-cache git
+# Cài đặt git và openssh trên môi trường Alpine Linux
+RUN apk add --no-cache git openssh-client
 
 WORKDIR /app
 
