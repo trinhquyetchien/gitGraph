@@ -603,7 +603,11 @@ async function renderCommitDetails(commit) {
   if (!diffData) {
     try {
       const repoParam = encodeURIComponent(repoPathInput.value.trim());
-      const res = await fetch(`/api/diff?repo=${repoParam}&hash=${commit.hash}`);
+      let res = await fetch(getApiUrl(`/diff?repo=${repoParam}&hash=${commit.hash}`, `/diff/${commit.hash}.json`));
+      if (!res.ok) {
+        // Fallback thử endpoint tĩnh nếu API động trả lỗi hoặc ngược lại
+        res = await fetch(`./api/diff/${commit.hash}.json`);
+      }
       diffData = await res.json();
       state.diffCache.set(commit.hash, diffData);
     } catch {
@@ -662,6 +666,21 @@ function selectCommit(hash) {
   renderCommitDetails(commit);
 }
 
+// API helpers supporting both dynamic server and static GitHub Pages
+const isStaticHost = 
+  window.location.hostname.includes("github.io") || 
+  window.location.protocol === "file:" ||
+  window.location.pathname.endsWith(".html");
+
+function getApiUrl(dynamicEndpoint, staticEndpoint) {
+  // Chuẩn hóa base path tương đối (hỗ trợ repo sub-path trên github.io/gitGraph/)
+  const base = window.location.pathname.replace(/\/index\.html$/, "").replace(/\/$/, "");
+  if (isStaticHost) {
+    return `${base}/api${staticEndpoint}`;
+  }
+  return `/api${dynamicEndpoint}`;
+}
+
 async function loadRepo(repoInput) {
   setStatus("Đang tải dữ liệu repository (Local / Remote)...", "loading");
 
@@ -669,10 +688,13 @@ async function loadRepo(repoInput) {
     const params = new URLSearchParams();
     if (repoInput) params.set("repo", repoInput);
 
-    const res = await fetch(`/api/repo?${params.toString()}`);
+    let res = await fetch(getApiUrl(`/repo?${params.toString()}`, `/repo.json`));
+    if (!res.ok) {
+      res = await fetch(`./api/repo.json`);
+    }
     const data = await res.json();
 
-    if (!res.ok) throw new Error(data.error || "Không thể tải repository.");
+    if (!data || data.error) throw new Error(data?.error || "Không thể tải repository.");
 
     state.data = data;
     repoPathInput.value = data.requestedPath;
@@ -713,6 +735,10 @@ commitSearchInput.addEventListener("input", () => {
 });
 
 fetchBtn.addEventListener("click", async () => {
+  if (isStaticHost) {
+    setStatus("Chế độ Static Demo (GitHub Pages): không hỗ trợ trực tiếp git fetch server.", "error");
+    return;
+  }
   const repoInput = repoPathInput.value.trim();
   setStatus("Đang fetch updates...", "loading");
   try {
@@ -725,7 +751,16 @@ fetchBtn.addEventListener("click", async () => {
 });
 
 // Initial boot
-const contextRes = await fetch("/api/context");
-const context = await contextRes.json();
-repoPathInput.value = context.defaultPath;
-await loadRepo(context.defaultPath);
+let defaultRepo = "";
+try {
+  const contextRes = await fetch(getApiUrl("/context", "/context.json"));
+  if (contextRes.ok) {
+    const context = await contextRes.json();
+    defaultRepo = context.defaultPath || "";
+  }
+} catch {
+  defaultRepo = "trinhquyetchien/gitGraph";
+}
+
+repoPathInput.value = defaultRepo;
+await loadRepo(defaultRepo);
