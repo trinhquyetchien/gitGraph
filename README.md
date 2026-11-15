@@ -2,6 +2,8 @@
 
 Ứng dụng trực quan hóa lịch sử commit Git (Git DAG Topology) trên nền tảng **Web**, hiển thị biểu đồ phân nhánh trực quan, hỗ trợ xem chi tiết commit và trình đọc **Git Diff** trực tiếp trên trình duyệt.
 
+![Git Graph Web Viewer Screenshot](screenshot.png)
+
 ## 🌟 Tính năng nổi bật
 
 - 🌳 **Commit Topology DAG Graph siêu nét**:
