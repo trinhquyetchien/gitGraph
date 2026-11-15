@@ -316,9 +316,10 @@ async function loadRepoData(inputPath) {
 
 async function loadCommitDiff(inputPath, hash) {
   const context = await resolveGitContext(inputPath);
-  const [rawFiles, diff] = await Promise.all([
-    runGit(context, ["show", "--name-status", "--pretty=format:", hash]).catch(() => ""),
-    runGit(context, ["show", "--patch", "--stat", hash]).catch(() => "")
+  const [rawFiles, stat, patch] = await Promise.all([
+    runGit(context, ["show", "--name-status", "--pretty=format:", "-m", hash]).catch(() => ""),
+    runGit(context, ["show", "--stat", "--pretty=format:", "-m", hash]).catch(() => ""),
+    runGit(context, ["show", "--patch", "--pretty=format:", "-m", hash]).catch(() => "")
   ]);
 
   const files = [];
@@ -331,7 +332,7 @@ async function loadCommitDiff(inputPath, hash) {
     }
   }
 
-  return { hash, files, diff };
+  return { hash, files, stat: stat.trim(), patch: patch.trim() };
 }
 
 function sendJson(response, statusCode, payload) {

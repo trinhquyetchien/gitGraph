@@ -251,36 +251,50 @@ function renderGraph(visibleCommits) {
       );
     }
 
-    // Ref Badges
+    // Ref Badges (Pill style with icons)
     let currentContentX = contentStartX;
     if (commit.refs.length > 0) {
       let badgeX = contentStartX;
       for (const ref of commit.refs) {
-        const textLen = ref.shortName.length;
-        const pillWidth = Math.max(48, textLen * 7.5 + 20);
+        let prefixIcon = "";
+        if (ref.type === "branch" || ref.type === "head") {
+          prefixIcon = "⑂ ";
+        } else if (ref.type === "tag") {
+          prefixIcon = "🏷 ";
+        } else if (ref.type === "remote") {
+          prefixIcon = "☁ ";
+        }
+
+        const displayText = prefixIcon + ref.shortName;
+        const textLen = displayText.length;
+        const pillWidth = Math.max(54, textLen * 7.2 + 18);
 
         const refGroup = createSvgNode("g", {
-          transform: `translate(${badgeX}, ${fromY - 20})`
+          transform: `translate(${badgeX}, ${fromY - 21})`,
+          class: `ref-tag-group ${ref.type}`
         });
 
+        // Pill background
         refGroup.append(
           createSvgNode("rect", {
             width: pillWidth,
-            height: 20,
-            class: `ref-tag-svg ${ref.type}`
+            height: 22,
+            rx: 6,
+            class: `ref-tag-svg ${ref.type} ${ref.isCurrentHead ? "is-current-head" : ""}`
           })
         );
 
+        // Pill label
         const refText = createSvgNode("text", {
           x: pillWidth / 2,
-          y: 11,
+          y: 12,
           class: "ref-tag-text"
         });
-        refText.textContent = ref.shortName;
+        refText.textContent = displayText;
         refGroup.append(refText);
         labelLayer.append(refGroup);
 
-        badgeX += pillWidth + 6;
+        badgeX += pillWidth + 8;
       }
       currentContentX = badgeX + 8;
     }
@@ -379,21 +393,123 @@ function renderGraph(visibleCommits) {
   graphSvg.append(rowBgLayer, edgeLayer, labelLayer, nodeLayer);
 }
 
-function formatDiffHtml(rawDiff) {
-  if (!rawDiff) return `<div class="diff-line">Không có thay đổi hoặc commit khởi tạo.</div>`;
+/**
+ * Parse git diff text into per-file structured chunks with line numbers
+ */
+function parseDiffByFile(rawDiff) {
+  if (!rawDiff || !rawDiff.trim()) return [];
 
-  const lines = rawDiff.split("\n");
-  return lines
-    .map((line) => {
-      let lineClass = "";
-      if (line.startsWith("+") && !line.startsWith("+++")) {
-        lineClass = "add";
-      } else if (line.startsWith("-") && !line.startsWith("---")) {
-        lineClass = "del";
-      } else if (line.startsWith("@@")) {
-        lineClass = "hunk";
+  // Split by diff --git
+  const fileChunks = rawDiff.split(/(?=^diff --git )/m);
+  const result = [];
+
+  for (const chunk of fileChunks) {
+    if (!chunk.trim()) continue;
+    const lines = chunk.split("\n");
+    let oldPath = "";
+    let newPath = "";
+    const firstLine = lines[0] || "";
+    const match = firstLine.match(/^diff --git a\/(.*?) b\/(.*)$/);
+    if (match) {
+      oldPath = match[1];
+      newPath = match[2];
+    }
+
+    const diffLines = [];
+    let oldLineNum = 0;
+    let newLineNum = 0;
+    let inHunk = false;
+
+    for (const line of lines) {
+      if (line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("--- ") || line.startsWith("+++ ") || line.startsWith("new file mode") || line.startsWith("deleted file mode")) {
+        continue;
       }
-      return `<div class="diff-line ${lineClass}">${escapeHtml(line)}</div>`;
+
+      if (line.startsWith("@@")) {
+        inHunk = true;
+        const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+        if (hunkMatch) {
+          oldLineNum = parseInt(hunkMatch[1], 10);
+          newLineNum = parseInt(hunkMatch[2], 10);
+        }
+        diffLines.push({
+          type: "hunk",
+          oldNum: "...",
+          newNum: "...",
+          text: line
+        });
+      } else if (inHunk) {
+        if (line.startsWith("+")) {
+          diffLines.push({
+            type: "add",
+            oldNum: "",
+            newNum: newLineNum++,
+            text: line.slice(1)
+          });
+        } else if (line.startsWith("-")) {
+          diffLines.push({
+            type: "del",
+            oldNum: oldLineNum++,
+            newNum: "",
+            text: line.slice(1)
+          });
+        } else {
+          // Context line
+          diffLines.push({
+            type: "ctx",
+            oldNum: oldLineNum++,
+            newNum: newLineNum++,
+            text: line.startsWith(" ") ? line.slice(1) : line
+          });
+        }
+      }
+    }
+
+    result.push({
+      filePath: newPath || oldPath || "file",
+      lines: diffLines
+    });
+  }
+
+  return result;
+}
+
+function renderDiffViewer(diffData) {
+  const patch = diffData.patch || diffData.diff || "";
+  const fileDiffs = parseDiffByFile(patch);
+
+  if (fileDiffs.length === 0) {
+    return `<div class="diff-empty">Không có thay đổi mã nguồn trong commit này.</div>`;
+  }
+
+  return fileDiffs
+    .map((file) => {
+      const lineRows = file.lines
+        .map((l) => {
+          return `
+            <tr class="diff-row ${l.type}">
+              <td class="diff-num old-num">${l.oldNum !== undefined ? l.oldNum : ""}</td>
+              <td class="diff-num new-num">${l.newNum !== undefined ? l.newNum : ""}</td>
+              <td class="diff-sign">${l.type === "add" ? "+" : l.type === "del" ? "-" : " "}</td>
+              <td class="diff-code"><code>${escapeHtml(l.text)}</code></td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="diff-file-block">
+          <div class="diff-file-header">
+            <span class="file-icon">📄</span>
+            <span class="file-path">${escapeHtml(file.filePath)}</span>
+          </div>
+          <div class="diff-table-wrapper">
+            <table class="diff-table">
+              <tbody>${lineRows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
     })
     .join("");
 }
@@ -424,7 +540,7 @@ async function renderCommitDetails(commit) {
       </div>
       <div class="commit-full-hash" title="Click để copy">${escapeHtml(commit.hash)}</div>
     </div>
-    <div id="diff-loading" class="empty-hint">Đang tải diff...</div>
+    <div id="diff-loading" class="empty-hint">Đang tải chi tiết thay đổi...</div>
   `;
 
   // Fetch diff
@@ -436,7 +552,7 @@ async function renderCommitDetails(commit) {
       diffData = await res.json();
       state.diffCache.set(commit.hash, diffData);
     } catch {
-      diffData = { files: [], diff: "Lỗi tải diff." };
+      diffData = { files: [], diff: "", patch: "", stat: "Lỗi tải diff." };
     }
   }
 
@@ -449,7 +565,7 @@ async function renderCommitDetails(commit) {
             (f) => `
           <div class="chip-item">
             <span class="chip-tag ${f.status}">${f.status}</span>
-            <span>${escapeHtml(f.path)}</span>
+            <span class="chip-path">${escapeHtml(f.path)}</span>
           </div>
         `
           )
@@ -458,16 +574,16 @@ async function renderCommitDetails(commit) {
     `
     : "";
 
-  const diffHtml = `
-    <div class="label-heading">Git Diff</div>
-    <div class="diff-card">
-      <div class="diff-stream">${formatDiffHtml(diffData.diff)}</div>
+  const diffViewerHtml = `
+    <div class="label-heading">So sánh thay đổi (Git Diff)</div>
+    <div class="diff-container">
+      ${renderDiffViewer(diffData)}
     </div>
   `;
 
   const loadingEl = document.querySelector("#diff-loading");
   if (loadingEl) {
-    loadingEl.outerHTML = filesHtml + diffHtml;
+    loadingEl.outerHTML = filesHtml + diffViewerHtml;
   }
 }
 
