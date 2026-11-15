@@ -262,6 +262,32 @@ function renderGraph(visibleCommits) {
   graphSvg.setAttribute("width", width);
   graphSvg.setAttribute("height", height);
 
+  // Tính toán vị trí duy nhất để in tên nhánh chạy dọc line:
+  // Mỗi nhánh liên tục chỉ in ĐÚNG 1 LẦN tại đoạn giữa của chuỗi commit nhánh đó
+  const branchEdgeGroups = new Map();
+  for (const commit of visibleCommits) {
+    for (const [pIdx, parent] of commit.parentCommits.entries()) {
+      if (pIdx === 0 && commit.inferredBranch) {
+        if (!branchEdgeGroups.has(commit.inferredBranch)) {
+          branchEdgeGroups.set(commit.inferredBranch, []);
+        }
+        branchEdgeGroups.get(commit.inferredBranch).push({
+          fromHash: commit.hash,
+          toHash: parent.hash
+        });
+      }
+    }
+  }
+
+  const singleBranchLabelEdgeKeys = new Set();
+  for (const [branchName, edgeList] of branchEdgeGroups.entries()) {
+    if (edgeList.length > 0) {
+      const midIdx = Math.floor(edgeList.length / 2);
+      const chosen = edgeList[midIdx];
+      singleBranchLabelEdgeKeys.add(`${chosen.fromHash}->${chosen.toHash}`);
+    }
+  }
+
   const rowBgLayer = createSvgNode("g", { class: "row-bg-layer" });
   const edgeLayer = createSvgNode("g", { class: "edge-layer" });
   const labelLayer = createSvgNode("g", { class: "label-layer" });
@@ -299,19 +325,19 @@ function renderGraph(visibleCommits) {
       });
       edgeLayer.append(edgePathEl);
 
-      // Hiển thị tên nhánh chạy uốn dọc theo đường line (Text along path)
-      const edgeBranch = pIdx === 0 ? commit.inferredBranch : parent.inferredBranch;
-      if (edgeBranch) {
+      // Hiển thị tên nhánh chạy uốn dọc theo đường line (Chỉ hiển thị DUY NHẤT 1 LẦN trên đoạn line này)
+      const edgeKey = `${commit.hash}->${parent.hash}`;
+      if (singleBranchLabelEdgeKeys.has(edgeKey) && commit.inferredBranch) {
         const textAlongPath = createSvgNode("text", {
           class: "edge-branch-label",
-          dy: -6
+          dy: -7
         });
         const textPath = createSvgNode("textPath", {
           href: `#${pathId}`,
           startOffset: "50%",
           "text-anchor": "middle"
         });
-        textPath.textContent = `— ${edgeBranch} —`;
+        textPath.textContent = `— ${commit.inferredBranch} —`;
         textAlongPath.append(textPath);
         labelLayer.append(textAlongPath);
       }
@@ -365,28 +391,7 @@ function renderGraph(visibleCommits) {
       }
       leftItemsEndX = curRefRightX;
     } else {
-      // Nếu commit không có ref trực tiếp, hiển thị tên nhánh ngầm suy luận ở bên trái
-      const prevCommit = visibleCommits[commit.row - 1];
-      const isBranchStartOrChange =
-        commit.inferredBranch &&
-        (!prevCommit || prevCommit.inferredBranch !== commit.inferredBranch || prevCommit.column !== commit.column);
-
-      if (isBranchStartOrChange) {
-        const branchLabel = createSvgNode("g", {
-          transform: `translate(${leftItemsEndX}, ${fromY})`,
-          class: "lane-branch-tag"
-        });
-
-        const bText = createSvgNode("text", {
-          x: 0,
-          y: 4,
-          class: "lane-branch-text",
-          fill: commit.color
-        });
-        bText.textContent = commit.inferredBranch;
-        branchLabel.append(bText);
-        labelLayer.append(branchLabel);
-      }
+      // Khi đã có tên nhánh chạy dọc theo line, không cần in chữ phụ bên trái để giữ biểu đồ sạch và thoáng
     }
 
     // --- CỘT BÊN PHẢI: Commit Subject & Meta ---
