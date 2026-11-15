@@ -65,13 +65,26 @@ function isRemoteUrl(input) {
   return /^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+:.*$/.test(str);
 }
 
+function normalizeGitUrl(input) {
+  if (!input) return "";
+  let str = input.trim();
+  // Chuyển git@github.com:user/repo.git thành https://github.com/user/repo.git nếu không có SSH key
+  const scpMatch = str.match(/^git@([^:]+):(.+)$/);
+  if (scpMatch) {
+    const [, host, repoPath] = scpMatch;
+    return `https://${host}/${repoPath}`;
+  }
+  return str;
+}
+
 async function ensureRemoteRepo(remoteUrl) {
   const cacheBase = process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
   const remotesDir = path.join(cacheBase, "gitgraph", "remotes");
   await fs.mkdir(remotesDir, { recursive: true });
 
-  const hash = crypto.createHash("sha256").update(remoteUrl).digest("hex").slice(0, 16);
-  const cleanUrl = remoteUrl.trim().replace(/\.git$/, "");
+  const targetUrl = normalizeGitUrl(remoteUrl);
+  const hash = crypto.createHash("sha256").update(targetUrl).digest("hex").slice(0, 16);
+  const cleanUrl = targetUrl.trim().replace(/\.git$/, "");
   const parts = cleanUrl.split(/[/:]/);
   const repoName = parts[parts.length - 1] || "remote-repo";
   const repoDir = path.join(remotesDir, `${repoName}-${hash}`);
@@ -85,7 +98,16 @@ async function ensureRemoteRepo(remoteUrl) {
     }
   } else {
     // Blobless bare clone: super fast commit DAG download without large files
-    await execFileAsync("git", ["clone", "--filter=blob:none", "--bare", remoteUrl, repoDir], { maxBuffer });
+    try {
+      await execFileAsync("git", ["clone", "--filter=blob:none", "--bare", targetUrl, repoDir], { maxBuffer });
+    } catch (err) {
+      // Nếu thất bại (ví dụ SSH lỗi hoặc targetUrl khác), thử lại với https nếu là github/gitlab/bitbucket
+      if (remoteUrl !== targetUrl) {
+        await execFileAsync("git", ["clone", "--filter=blob:none", "--bare", remoteUrl, repoDir], { maxBuffer });
+      } else {
+        throw err;
+      }
+    }
   }
 
   return {
