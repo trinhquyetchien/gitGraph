@@ -40,13 +40,26 @@ if [ -z "$TARGET_DIR" ]; then
   fi
 fi
 
-# Prioritize Wezterm with user's shell (zsh)
-if command -v wezterm >/dev/null 2>&1; then
-  exec wezterm start --always-new-process --title "Git Graph" "$HOME/.local/bin/gitgraph" "$TARGET_DIR"
-elif command -v gnome-terminal >/dev/null 2>&1; then
-  exec gnome-terminal --title="Git Graph" -- "$HOME/.local/bin/gitgraph" "$TARGET_DIR"
-elif command -v x-terminal-emulator >/dev/null 2>&1; then
-  exec x-terminal-emulator -T "Git Graph" -e "$HOME/.local/bin/gitgraph" "$TARGET_DIR"
-else
+# Try launching in terminal using user's shell zsh
+launch_app() {
+  # 1. First try wezterm start if functioning
+  if command -v wezterm >/dev/null 2>&1; then
+    wezterm start -- "$HOME/.local/bin/gitgraph" "$TARGET_DIR" 2>/dev/null && return 0
+  fi
+
+  # 2. Try gnome-terminal with zsh
+  if command -v gnome-terminal >/dev/null 2>&1; then
+    exec gnome-terminal --title="Git Graph" -- /bin/zsh -c "\"$HOME/.local/bin/gitgraph\" \"$TARGET_DIR\""
+    return 0
+  fi
+
+  # 3. Fallback to system terminal
+  if command -v x-terminal-emulator >/dev/null 2>&1; then
+    exec x-terminal-emulator -T "Git Graph" -e /bin/zsh -c "\"$HOME/.local/bin/gitgraph\" \"$TARGET_DIR\""
+    return 0
+  fi
+
   exec "$HOME/.local/bin/gitgraph" "$TARGET_DIR"
-fi
+}
+
+launch_app
