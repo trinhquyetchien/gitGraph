@@ -1,5 +1,7 @@
 import http from "node:http";
 import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -11,7 +13,7 @@ const publicDir = path.join(__dirname, "public");
 const defaultRepoPath = process.cwd();
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
-const maxBuffer = 24 * 1024 * 1024;
+const maxBuffer = 32 * 1024 * 1024;
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -54,7 +56,52 @@ async function resolveGitPointer(dotGitFilePath) {
   return path.resolve(path.dirname(dotGitFilePath), match[1].trim());
 }
 
+function isRemoteUrl(input) {
+  if (!input) return false;
+  const str = input.trim();
+  if (str.startsWith("https://") || str.startsWith("http://") || str.startsWith("git://") || str.startsWith("ssh://")) {
+    return true;
+  }
+  return /^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+:.*$/.test(str);
+}
+
+async function ensureRemoteRepo(remoteUrl) {
+  const cacheBase = process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
+  const remotesDir = path.join(cacheBase, "gitgraph", "remotes");
+  await fs.mkdir(remotesDir, { recursive: true });
+
+  const hash = crypto.createHash("sha256").update(remoteUrl).digest("hex").slice(0, 16);
+  const cleanUrl = remoteUrl.trim().replace(/\.git$/, "");
+  const parts = cleanUrl.split(/[/:]/);
+  const repoName = parts[parts.length - 1] || "remote-repo";
+  const repoDir = path.join(remotesDir, `${repoName}-${hash}`);
+
+  if (await fileExists(repoDir)) {
+    // Already cloned, fetch updates
+    try {
+      await execFileAsync("git", ["--git-dir", repoDir, "fetch", "--all", "--prune"], { maxBuffer });
+    } catch {
+      // Continue even if offline
+    }
+  } else {
+    // Blobless bare clone: super fast commit DAG download without large files
+    await execFileAsync("git", ["clone", "--filter=blob:none", "--bare", remoteUrl, repoDir], { maxBuffer });
+  }
+
+  return {
+    requestedPath: remoteUrl,
+    repoPath: repoDir,
+    gitDir: repoDir,
+    isBare: true,
+    isRemote: true
+  };
+}
+
 async function resolveGitContext(inputPath) {
+  if (isRemoteUrl(inputPath)) {
+    return await ensureRemoteRepo(inputPath);
+  }
+
   const requestedPath = inputPath
     ? path.resolve(defaultRepoPath, inputPath)
     : defaultRepoPath;
@@ -70,7 +117,8 @@ async function resolveGitContext(inputPath) {
         requestedPath,
         repoPath: path.dirname(requestedPath),
         gitDir: requestedPath,
-        isBare: false
+        isBare: false,
+        isRemote: false
       };
     }
     if (stats.isFile()) {
@@ -78,7 +126,8 @@ async function resolveGitContext(inputPath) {
         requestedPath,
         repoPath: path.dirname(requestedPath),
         gitDir: await resolveGitPointer(requestedPath),
-        isBare: false
+        isBare: false,
+        isRemote: false
       };
     }
   }
@@ -92,7 +141,8 @@ async function resolveGitContext(inputPath) {
           requestedPath,
           repoPath: requestedPath,
           gitDir: dotGitPath,
-          isBare: false
+          isBare: false,
+          isRemote: false
         };
       }
       if (dotGitStats.isFile()) {
@@ -100,7 +150,8 @@ async function resolveGitContext(inputPath) {
           requestedPath,
           repoPath: requestedPath,
           gitDir: await resolveGitPointer(dotGitPath),
-          isBare: false
+          isBare: false,
+          isRemote: false
         };
       }
     }
@@ -116,14 +167,15 @@ async function resolveGitContext(inputPath) {
         requestedPath,
         repoPath: requestedPath,
         gitDir: requestedPath,
-        isBare: true
+        isBare: true,
+        isRemote: false
       };
     }
   } catch {
     // Fall through
   }
 
-  throw new Error(`Git metadata was not found at ${requestedPath}.`);
+  throw new Error(`Git metadata not found at ${requestedPath}.`);
 }
 
 function parseRefs(rawRefs, headRefName, detachedHeadHash) {
@@ -249,6 +301,7 @@ async function loadRepoData(inputPath) {
     repoPath: context.repoPath,
     gitDir: context.gitDir,
     isBare: context.isBare,
+    isRemote: context.isRemote,
     headRefName,
     commits,
     refs,
@@ -328,7 +381,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, payload);
     } catch (error) {
       sendJson(response, 400, {
-        error: error instanceof Error ? error.message : "Unable to read the Git repository.",
+        error: error instanceof Error ? error.message : "Unable to read repository.",
         defaultPath: defaultRepoPath,
         requestedPath: url.searchParams.get("repo") || defaultRepoPath
       });

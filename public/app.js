@@ -1,23 +1,22 @@
-// Vibrant High-Contrast Colors for Branch Lines
+// High contrast vibrant colors for distinct DAG branches
 const LANE_COLORS = [
-  "#00f0ff", // Neon Cyan
-  "#ff2a85", // Electric Pink
-  "#ffb800", // Warm Gold
-  "#00ff85", // Mint Green
-  "#bd00ff", // Royal Purple
-  "#3b82f6", // Sapphire Blue
-  "#ff6b00", // Radiant Orange
-  "#00e5ff", // Vivid Turquoise
-  "#f43f5e", // Rose Red
-  "#84cc16"  // Lime Green
+  "#0ea5e9", // Sky Blue
+  "#ec4899", // Vivid Pink
+  "#f59e0b", // Amber
+  "#10b981", // Emerald
+  "#8b5cf6", // Purple
+  "#06b6d4", // Cyan
+  "#f97316", // Orange
+  "#6366f1", // Indigo
+  "#14b8a6", // Teal
+  "#84cc16"  // Lime
 ];
 
 const layout = {
   top: 40,
   left: 48,
-  rowHeight: 64, // Comfortable row height
-  laneWidth: 36,  // Lane width for distinct columns
-  rightPadding: 400,
+  rowHeight: 64,
+  laneWidth: 38,
   bottom: 48
 };
 
@@ -25,13 +24,16 @@ const state = {
   data: null,
   selectedHash: null,
   diffCache: new Map(),
+  theme: localStorage.getItem("gitgraph-theme") || "dark",
   filters: {
     query: "",
     headOnly: false
   }
 };
 
-// DOM Elements
+// DOM references
+const htmlEl = document.documentElement;
+const themeToggleBtn = document.querySelector("#theme-toggle-btn");
 const form = document.querySelector("#repo-form");
 const repoPathInput = document.querySelector("#repo-path");
 const refreshBtn = document.querySelector("#refresh-btn");
@@ -45,6 +47,18 @@ const graphScroll = document.querySelector("#graph-scroll");
 const graphSvg = document.querySelector("#graph-svg");
 const inspectorContent = document.querySelector("#inspector-content");
 const selectedShortHash = document.querySelector("#selected-short-hash");
+
+// Initialize theme
+function applyTheme(theme) {
+  state.theme = theme;
+  htmlEl.setAttribute("data-theme", theme);
+  localStorage.setItem("gitgraph-theme", theme);
+}
+applyTheme(state.theme);
+
+themeToggleBtn.addEventListener("click", () => {
+  applyTheme(state.theme === "dark" ? "light" : "dark");
+});
 
 function escapeHtml(value) {
   return String(value)
@@ -68,7 +82,6 @@ function firstEmptyLane(lanes) {
   return index === -1 ? lanes.length : index;
 }
 
-// Compute DAG columns for branch separation
 function assignGraphColumns(commits) {
   const lanes = [];
   const byHash = new Map();
@@ -125,22 +138,22 @@ function createSvgNode(tagName, attributes = {}) {
   return node;
 }
 
-// Smooth curved path between commit nodes
 function edgePath(fromX, fromY, toX, toY) {
   if (fromX === toX) {
     return `M ${fromX} ${fromY} L ${toX} ${toY}`;
   }
-  const bend = Math.min(48, Math.max(20, Math.abs(toY - fromY) / 2));
+  const bend = Math.min(50, Math.max(22, Math.abs(toY - fromY) / 2));
   return `M ${fromX} ${fromY} C ${fromX} ${fromY + bend} ${toX} ${toY - bend} ${toX} ${toY}`;
 }
 
 function renderStats(data) {
+  const typeBadge = data.isRemote ? "Remote" : "Local";
   repoStats.innerHTML = `
+    <span><strong>${escapeHtml(typeBadge)}</strong></span>
+    <span>•</span>
     <span>Commits: <strong>${data.stats.commitCount}</strong></span>
     <span>•</span>
     <span>HEAD: <strong>${escapeHtml(data.headRefName ? data.headRefName.replace(/^refs\/heads\//, '') : 'DETACHED')}</strong></span>
-    <span>•</span>
-    <span>Branches: <strong>${data.stats.refCount}</strong></span>
   `;
 }
 
@@ -192,7 +205,7 @@ function renderGraph(visibleCommits) {
     const fromY = layout.top + commit.row * layout.rowHeight;
     const isSelected = commit.hash === state.selectedHash;
 
-    // Row full-width clickable background
+    // Clickable row background
     const rowBg = createSvgNode("rect", {
       x: 0,
       y: fromY - layout.rowHeight / 2,
@@ -203,7 +216,7 @@ function renderGraph(visibleCommits) {
     rowBg.addEventListener("click", () => selectCommit(commit.hash));
     rowBgLayer.append(rowBg);
 
-    // Edges to parents
+    // Thick prominent branch curves
     for (const parent of commit.parentCommits) {
       const toX = layout.left + parent.column * layout.laneWidth;
       const toY = layout.top + parent.row * layout.rowHeight;
@@ -217,7 +230,7 @@ function renderGraph(visibleCommits) {
       );
     }
 
-    // Ref Badges (Branch/Tag pills)
+    // Ref Badges
     let currentContentX = contentStartX;
     if (commit.refs.length > 0) {
       let badgeX = contentStartX;
@@ -251,7 +264,7 @@ function renderGraph(visibleCommits) {
       currentContentX = badgeX + 8;
     }
 
-    // Subject text
+    // Subject
     const subject = createSvgNode("text", {
       x: currentContentX,
       y: fromY - 6,
@@ -260,7 +273,7 @@ function renderGraph(visibleCommits) {
     subject.textContent = commit.subject || "(no subject)";
     labelLayer.append(subject);
 
-    // Meta text (Hash | Author | Date)
+    // Meta (shortHash • Author • Date)
     const meta = createSvgNode("text", {
       x: currentContentX,
       y: fromY + 14,
@@ -276,13 +289,13 @@ function renderGraph(visibleCommits) {
     meta.textContent = `${commit.shortHash} • ${commit.authorName} • ${dateStr}`;
     labelLayer.append(meta);
 
-    // Node group (Outer Glow + Center Circle)
+    // Big Clear Commit Node
     const nodeGroup = createSvgNode("g", {
       class: `commit-node ${isSelected ? "selected" : ""}`,
       "data-hash": commit.hash
     });
 
-    // Hit test circle
+    // Node Hit Area
     nodeGroup.append(
       createSvgNode("circle", {
         cx: fromX,
@@ -292,25 +305,25 @@ function renderGraph(visibleCommits) {
       })
     );
 
-    // Outer glow ring
+    // Node Outer Ring
     nodeGroup.append(
       createSvgNode("circle", {
         cx: fromX,
         cy: fromY,
-        r: 8,
+        r: 8.5,
         stroke: commit.color,
-        class: "node-glow"
+        class: "node-outer"
       })
     );
 
-    // Inner bright core
+    // Node Solid Core
     nodeGroup.append(
       createSvgNode("circle", {
         cx: fromX,
         cy: fromY,
-        r: 6,
+        r: 5.5,
         fill: commit.color,
-        class: "node-core"
+        class: "node-inner"
       })
     );
 
@@ -321,7 +334,6 @@ function renderGraph(visibleCommits) {
   graphSvg.append(rowBgLayer, edgeLayer, labelLayer, nodeLayer);
 }
 
-// Format diff lines with syntax styling
 function formatDiffHtml(rawDiff) {
   if (!rawDiff) return `<div class="diff-line">Không có thay đổi hoặc commit khởi tạo.</div>`;
 
@@ -344,31 +356,32 @@ function formatDiffHtml(rawDiff) {
 async function renderCommitDetails(commit) {
   if (!commit) {
     selectedShortHash.textContent = "";
-    inspectorContent.innerHTML = `<p class="placeholder-text">Chọn một commit để xem chi tiết.</p>`;
+    inspectorContent.innerHTML = `<div class="empty-hint">Chọn một commit để kiểm tra chi tiết.</div>`;
     return;
   }
 
   selectedShortHash.textContent = commit.shortHash;
 
-  // Render header card first
   inspectorContent.innerHTML = `
-    <div class="commit-header-card">
+    <div class="commit-card">
       <div class="commit-title">${escapeHtml(commit.subject)}</div>
-      <div class="commit-author-time">
+      <div class="commit-meta-row">
         <span>Tác giả: <strong>${escapeHtml(commit.authorName)}</strong> &lt;${escapeHtml(commit.authorEmail)}&gt;</span>
+      </div>
+      <div class="commit-meta-row">
         <span>Thời gian: ${escapeHtml(new Date(commit.authoredAt).toLocaleString())}</span>
       </div>
-      <div class="full-hash" title="Click để copy">${escapeHtml(commit.hash)}</div>
+      <div class="commit-full-hash" title="Click để copy">${escapeHtml(commit.hash)}</div>
     </div>
-    <div id="diff-section-loading" class="placeholder-text">Đang tải diff chi tiết...</div>
+    <div id="diff-loading" class="empty-hint">Đang tải diff...</div>
   `;
 
-  // Fetch Diff asynchronously
+  // Fetch diff
   let diffData = state.diffCache.get(commit.hash);
   if (!diffData) {
     try {
-      const repoPath = repoPathInput.value.trim();
-      const res = await fetch(`/api/diff?repo=${encodeURIComponent(repoPath)}&hash=${commit.hash}`);
+      const repoParam = encodeURIComponent(repoPathInput.value.trim());
+      const res = await fetch(`/api/diff?repo=${repoParam}&hash=${commit.hash}`);
       diffData = await res.json();
       state.diffCache.set(commit.hash, diffData);
     } catch {
@@ -376,17 +389,16 @@ async function renderCommitDetails(commit) {
     }
   }
 
-  // Render file list and diff body
   const filesHtml = diffData.files && diffData.files.length > 0
     ? `
-      <div class="section-title">Files thay đổi (${diffData.files.length})</div>
-      <div class="file-list">
+      <div class="label-heading">Files thay đổi (${diffData.files.length})</div>
+      <div class="file-chips">
         ${diffData.files
           .map(
             (f) => `
-          <div class="file-item">
-            <span class="file-badge ${f.status}">${f.status}</span>
-            <span class="file-name">${escapeHtml(f.path)}</span>
+          <div class="chip-item">
+            <span class="chip-tag ${f.status}">${f.status}</span>
+            <span>${escapeHtml(f.path)}</span>
           </div>
         `
           )
@@ -396,13 +408,13 @@ async function renderCommitDetails(commit) {
     : "";
 
   const diffHtml = `
-    <div class="section-title">Git Diff</div>
-    <div class="diff-container">
-      <div class="diff-body">${formatDiffHtml(diffData.diff)}</div>
+    <div class="label-heading">Git Diff</div>
+    <div class="diff-card">
+      <div class="diff-stream">${formatDiffHtml(diffData.diff)}</div>
     </div>
   `;
 
-  const loadingEl = document.querySelector("#diff-section-loading");
+  const loadingEl = document.querySelector("#diff-loading");
   if (loadingEl) {
     loadingEl.outerHTML = filesHtml + diffHtml;
   }
@@ -416,17 +428,17 @@ function selectCommit(hash) {
   renderCommitDetails(commit);
 }
 
-async function loadRepo(repoPath) {
-  setStatus("Đang tải dữ liệu repository...", "loading");
+async function loadRepo(repoInput) {
+  setStatus("Đang tải dữ liệu repository (Local / Remote)...", "loading");
 
   try {
     const params = new URLSearchParams();
-    if (repoPath) params.set("repo", repoPath);
+    if (repoInput) params.set("repo", repoInput);
 
     const res = await fetch(`/api/repo?${params.toString()}`);
     const data = await res.json();
 
-    if (!res.ok) throw new Error(data.error || "Không thể tải repo.");
+    if (!res.ok) throw new Error(data.error || "Không thể tải repository.");
 
     state.data = data;
     repoPathInput.value = data.requestedPath;
@@ -440,7 +452,7 @@ async function loadRepo(repoPath) {
       renderCommitDetails(visible[0]);
     }
 
-    setStatus(`Đã tải ${data.stats.commitCount} commits từ ${data.repoPath}`, "success");
+    setStatus(`Đã tải ${data.stats.commitCount} commits thành công.`, "success");
   } catch (err) {
     state.data = null;
     state.selectedHash = null;
@@ -467,18 +479,18 @@ commitSearchInput.addEventListener("input", () => {
 });
 
 fetchBtn.addEventListener("click", async () => {
-  const repoPath = repoPathInput.value.trim();
-  setStatus("Đang fetch từ remotes...", "loading");
+  const repoInput = repoPathInput.value.trim();
+  setStatus("Đang fetch updates...", "loading");
   try {
-    const res = await fetch(`/api/fetch?repo=${encodeURIComponent(repoPath)}`, { method: "POST" });
+    const res = await fetch(`/api/fetch?repo=${encodeURIComponent(repoInput)}`, { method: "POST" });
     if (!res.ok) throw new Error("Fetch thất bại.");
-    await loadRepo(repoPath);
+    await loadRepo(repoInput);
   } catch (err) {
     setStatus(err.message, "error");
   }
 });
 
-// Init
+// Initial boot
 const contextRes = await fetch("/api/context");
 const context = await contextRes.json();
 repoPathInput.value = context.defaultPath;
