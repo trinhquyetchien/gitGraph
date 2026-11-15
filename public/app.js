@@ -1,23 +1,23 @@
-// High contrast vibrant colors for distinct DAG branches
+// Modern curated palette with soft yet vibrant branch colors
 const LANE_COLORS = [
-  "#0ea5e9", // Sky Blue
-  "#ec4899", // Vivid Pink
-  "#f59e0b", // Amber
-  "#10b981", // Emerald
-  "#8b5cf6", // Purple
-  "#06b6d4", // Cyan
-  "#f97316", // Orange
-  "#6366f1", // Indigo
-  "#14b8a6", // Teal
-  "#84cc16"  // Lime
+  "#38bdf8", // Sky
+  "#a78bfa", // Purple/Violet
+  "#34d399", // Emerald
+  "#fbbf24", // Amber
+  "#f472b6", // Rose Pink
+  "#22d3ee", // Cyan
+  "#fb923c", // Coral Orange
+  "#818cf8", // Indigo
+  "#2dd4bf", // Teal
+  "#a3e635"  // Lime
 ];
 
 const layout = {
-  top: 40,
-  leftColWidth: 320, // Không gian bên trái dành cho Branch Names & Refs
-  rowHeight: 64,
-  laneWidth: 40,
-  bottom: 48
+  top: 36,
+  leftColWidth: 260, // Cột trái dành cho Branch Pills & Refs
+  rowHeight: 52,     // Chiều cao dòng chuẩn mực, thoáng và hiện đại
+  laneWidth: 32,     // Khoảng cách giữa các line gọn gàng
+  bottom: 40
 };
 
 const state = {
@@ -416,20 +416,20 @@ function renderGraph(visibleCommits) {
     labelLayer.append(meta);
 
     // Mốc tạo nhánh (Branch Creation Milestone):
-    // Đánh dấu commit khởi nguồn khi một nhánh mới được tách ra từ nhánh cha
+    // Hiển thị thanh lịch ở phía sau subject commit ở cột bên phải
     if (commit.isBranchCreation && commit.branchCreatedFrom) {
       const milestoneGroup = createSvgNode("g", {
-        transform: `translate(${fromX + 16}, ${fromY - 14})`,
+        transform: `translate(${contentStartX}, ${fromY + 16})`,
         class: "branch-milestone-badge"
       });
 
-      const milestoneText = `★ Mốc tạo nhánh '${commit.inferredBranch}' từ '${commit.branchCreatedFrom}'`;
-      const mTextWidth = Math.max(90, milestoneText.length * 6.8 + 18);
+      const milestoneText = `★ Rẽ nhánh từ '${commit.branchCreatedFrom}'`;
+      const mTextWidth = Math.max(90, milestoneText.length * 6.5 + 16);
 
       milestoneGroup.append(
         createSvgNode("rect", {
           width: mTextWidth,
-          height: 20,
+          height: 18,
           rx: 4,
           class: "milestone-rect"
         })
@@ -437,7 +437,7 @@ function renderGraph(visibleCommits) {
 
       const mText = createSvgNode("text", {
         x: mTextWidth / 2,
-        y: 11,
+        y: 10,
         class: "milestone-text"
       });
       mText.textContent = milestoneText;
@@ -463,9 +463,9 @@ function renderGraph(visibleCommits) {
     );
 
     if (isMerge) {
-      // ◈ MERGE COMMIT: Hình thoi Diamond viền đôi sang trọng
-      const dSize = 9;
-      const dInner = 5.5;
+      // ◈ MERGE COMMIT: Hình thoi Diamond thanh thoát
+      const dSize = 7.5;
+      const dInner = 4.5;
 
       // Outer diamond ring
       nodeGroup.append(
@@ -485,12 +485,12 @@ function renderGraph(visibleCommits) {
         })
       );
     } else {
-      // ● REGULAR COMMIT: Hình tròn tiêu chuẩn
+      // ● REGULAR COMMIT: Hình tròn gọn gàng chuẩn GitHub Desktop
       nodeGroup.append(
         createSvgNode("circle", {
           cx: fromX,
           cy: fromY,
-          r: 8.5,
+          r: 7,
           stroke: commit.color,
           class: "node-outer"
         })
@@ -500,7 +500,7 @@ function renderGraph(visibleCommits) {
         createSvgNode("circle", {
           cx: fromX,
           cy: fromY,
-          r: 5.5,
+          r: 4,
           fill: commit.color,
           class: "node-inner"
         })
