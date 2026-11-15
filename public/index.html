@@ -1,58 +1,125 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Git Graph Local Viewer</title>
+    <title>Git Graph - Modern DAG Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">LOCAL GIT DAG</p>
-          <h1>Git Graph Viewer</h1>
-          <p class="hero-copy">
-            Doc metadata Git tu repo local va ve commit graph dang node, branch, merge theo thoi gian.
-          </p>
-        </div>
-        <form id="repo-form" class="repo-form">
-          <label for="repo-path">Duong dan repo hoac .git</label>
-          <div class="repo-controls">
-            <input id="repo-path" name="repo" type="text" spellcheck="false" autocomplete="off" />
-            <button type="submit">Tai lai graph</button>
+    <div class="app-layout">
+      <!-- Top Clean Header Bar -->
+      <header class="app-header">
+        <div class="header-left">
+          <div class="logo">
+            <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="18" r="3"/>
+              <circle cx="6" cy="6" r="3"/>
+              <path d="M6 9a9 9 0 0 0 9 9"/>
+              <circle cx="18" cy="6" r="3"/>
+              <path d="M18 9v6"/>
+            </svg>
+            <span class="logo-text">Git Graph</span>
           </div>
-        </form>
+
+          <!-- Dual Input (Local Path or Remote Git URL) -->
+          <form id="repo-form" class="repo-input-form">
+            <div class="input-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+            </div>
+            <input
+              id="repo-path"
+              type="text"
+              placeholder="Nhập đường dẫn Local (/path/to/repo) hoặc Remote URL (https://..., git@...)"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button type="submit" class="btn-load">Mở Repo</button>
+          </form>
+        </div>
+
+        <div class="header-right">
+          <button id="theme-toggle-btn" class="icon-btn" title="Chuyển chế độ Sáng / Tối" type="button">
+            <!-- Sun / Moon Icon -->
+            <svg id="theme-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+          </button>
+          <button id="fetch-btn" class="btn-secondary" type="button">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Fetch</span>
+          </button>
+          <button id="refresh-btn" class="btn-secondary" type="button">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span>Làm mới</span>
+          </button>
+        </div>
       </header>
 
-      <main class="workspace">
-        <section class="panel panel-graph">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Graph</p>
-              <h2>Commit topology</h2>
-            </div>
-            <button id="refresh-button" class="ghost-button" type="button">Refresh</button>
+      <!-- Sub Filter Bar -->
+      <div class="sub-bar">
+        <div class="filter-group">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input id="commit-search" type="search" placeholder="Tìm theo hash, subject, author..." autocomplete="off" />
           </div>
-          <div id="status-banner" class="status-banner loading">Dang nap du lieu repo...</div>
-          <div id="repo-meta" class="repo-meta"></div>
+          <label class="head-filter-toggle">
+            <input id="head-only-toggle" type="checkbox" />
+            <span>Chỉ commits trên HEAD</span>
+          </label>
+        </div>
+        <div id="repo-stats" class="stats-pills"></div>
+      </div>
+
+      <!-- Live Status Notice -->
+      <div id="status-banner" class="status-banner loading">Đang nạp dữ liệu repository...</div>
+
+      <!-- Main Workspace (Dual Pane) -->
+      <main class="main-content">
+        <!-- Left: SVG Commit DAG Graph -->
+        <section class="graph-pane">
           <div id="graph-empty" class="graph-empty hidden">
-            Khong co commit de hien thi. Tao commit dau tien hoac chon mot repo khac.
+            <p>Không có commit nào để hiển thị.</p>
           </div>
-          <div id="graph-scroll" class="graph-scroll hidden">
-            <svg id="graph-svg" role="img" aria-label="Git commit graph"></svg>
+          <div id="graph-scroll" class="graph-scroll-area">
+            <svg id="graph-svg" role="img" aria-label="Git Commit Graph"></svg>
           </div>
         </section>
 
-        <aside class="panel panel-details">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Commit</p>
-              <h2>Chi tiet</h2>
-            </div>
+        <!-- Right: Commit Inspector & Real-time Diff -->
+        <aside class="inspector-pane">
+          <div class="inspector-title-bar">
+            <h4>Chi tiết Commit</h4>
+            <span id="selected-short-hash" class="badge-hash"></span>
           </div>
-          <div id="details-pane" class="details-pane">
-            <p>Chon mot node de xem hash, refs, author va parent commits.</p>
+          <div id="inspector-content" class="inspector-body">
+            <div class="empty-hint">Chọn một commit ở danh sách bên trái để kiểm tra chi tiết.</div>
           </div>
         </aside>
       </main>
@@ -60,4 +127,4 @@
 
     <script type="module" src="/app.js"></script>
   </body>
-  </html>
+</html>

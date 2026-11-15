@@ -1,5 +1,7 @@
 import http from "node:http";
 import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -9,9 +11,9 @@ const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
 const defaultRepoPath = process.cwd();
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 4173);
-const maxBuffer = 24 * 1024 * 1024;
+const maxBuffer = 32 * 1024 * 1024;
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -25,7 +27,6 @@ function buildGitArgs(context, args) {
   if (context.isBare) {
     return ["--git-dir", context.gitDir, ...args];
   }
-
   return ["--git-dir", context.gitDir, "--work-tree", context.repoPath, ...args];
 }
 
@@ -34,7 +35,6 @@ async function runGit(context, args) {
     cwd: defaultRepoPath,
     maxBuffer
   });
-
   return stdout.trimEnd();
 }
 
@@ -50,22 +50,65 @@ async function fileExists(targetPath) {
 async function resolveGitPointer(dotGitFilePath) {
   const content = await fs.readFile(dotGitFilePath, "utf8");
   const match = content.match(/^gitdir:\s*(.+)$/m);
-
   if (!match) {
-    throw new Error(`Khong the doc file .git tai ${dotGitFilePath}.`);
+    throw new Error(`Unable to read the .git file at ${dotGitFilePath}.`);
   }
-
   return path.resolve(path.dirname(dotGitFilePath), match[1].trim());
 }
 
+function isRemoteUrl(input) {
+  if (!input) return false;
+  const str = input.trim();
+  if (str.startsWith("https://") || str.startsWith("http://") || str.startsWith("git://") || str.startsWith("ssh://")) {
+    return true;
+  }
+  return /^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+:.*$/.test(str);
+}
+
+async function ensureRemoteRepo(remoteUrl) {
+  const cacheBase = process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
+  const remotesDir = path.join(cacheBase, "gitgraph", "remotes");
+  await fs.mkdir(remotesDir, { recursive: true });
+
+  const hash = crypto.createHash("sha256").update(remoteUrl).digest("hex").slice(0, 16);
+  const cleanUrl = remoteUrl.trim().replace(/\.git$/, "");
+  const parts = cleanUrl.split(/[/:]/);
+  const repoName = parts[parts.length - 1] || "remote-repo";
+  const repoDir = path.join(remotesDir, `${repoName}-${hash}`);
+
+  if (await fileExists(repoDir)) {
+    // Already cloned, fetch updates
+    try {
+      await execFileAsync("git", ["--git-dir", repoDir, "fetch", "--all", "--prune"], { maxBuffer });
+    } catch {
+      // Continue even if offline
+    }
+  } else {
+    // Blobless bare clone: super fast commit DAG download without large files
+    await execFileAsync("git", ["clone", "--filter=blob:none", "--bare", remoteUrl, repoDir], { maxBuffer });
+  }
+
+  return {
+    requestedPath: remoteUrl,
+    repoPath: repoDir,
+    gitDir: repoDir,
+    isBare: true,
+    isRemote: true
+  };
+}
+
 async function resolveGitContext(inputPath) {
+  if (isRemoteUrl(inputPath)) {
+    return await ensureRemoteRepo(inputPath);
+  }
+
   const requestedPath = inputPath
     ? path.resolve(defaultRepoPath, inputPath)
     : defaultRepoPath;
   const stats = await fs.stat(requestedPath).catch(() => null);
 
   if (!stats) {
-    throw new Error(`Khong tim thay duong dan ${requestedPath}.`);
+    throw new Error(`Path not found: ${requestedPath}.`);
   }
 
   if (path.basename(requestedPath) === ".git") {
@@ -74,41 +117,41 @@ async function resolveGitContext(inputPath) {
         requestedPath,
         repoPath: path.dirname(requestedPath),
         gitDir: requestedPath,
-        isBare: false
+        isBare: false,
+        isRemote: false
       };
     }
-
     if (stats.isFile()) {
       return {
         requestedPath,
         repoPath: path.dirname(requestedPath),
         gitDir: await resolveGitPointer(requestedPath),
-        isBare: false
+        isBare: false,
+        isRemote: false
       };
     }
   }
 
   if (stats.isDirectory()) {
     const dotGitPath = path.join(requestedPath, ".git");
-
     if (await fileExists(dotGitPath)) {
       const dotGitStats = await fs.stat(dotGitPath);
-
       if (dotGitStats.isDirectory()) {
         return {
           requestedPath,
           repoPath: requestedPath,
           gitDir: dotGitPath,
-          isBare: false
+          isBare: false,
+          isRemote: false
         };
       }
-
       if (dotGitStats.isFile()) {
         return {
           requestedPath,
           repoPath: requestedPath,
           gitDir: await resolveGitPointer(dotGitPath),
-          isBare: false
+          isBare: false,
+          isRemote: false
         };
       }
     }
@@ -119,33 +162,27 @@ async function resolveGitContext(inputPath) {
       cwd: defaultRepoPath,
       maxBuffer
     });
-
     if (bare.stdout.trim() === "true") {
       return {
         requestedPath,
         repoPath: requestedPath,
         gitDir: requestedPath,
-        isBare: true
+        isBare: true,
+        isRemote: false
       };
     }
   } catch {
-    // Fall through to the final error below.
+    // Fall through
   }
 
-  throw new Error(
-    `Khong tim thay metadata Git tai ${requestedPath}. Hay chay app trong mot repo hoac nhap duong dan repo/.git hop le.`
-  );
+  throw new Error(`Git metadata not found at ${requestedPath}.`);
 }
 
 function parseRefs(rawRefs, headRefName, detachedHeadHash) {
   const refs = [];
-
   if (rawRefs) {
     for (const line of rawRefs.split("\n")) {
-      if (!line) {
-        continue;
-      }
-
+      if (!line) continue;
       const [refName, objectName, peeledObjectName, isCurrentHead] = line.split("\t");
       const target = peeledObjectName || objectName;
       const type = refName.startsWith("refs/heads/")
@@ -186,10 +223,7 @@ function parseRefs(rawRefs, headRefName, detachedHeadHash) {
 }
 
 function parseCommits(rawLog, refsByTarget) {
-  if (!rawLog) {
-    return [];
-  }
-
+  if (!rawLog) return [];
   return rawLog
     .split("\u001e")
     .map((entry) => entry.trim())
@@ -197,7 +231,6 @@ function parseCommits(rawLog, refsByTarget) {
     .map((entry) => {
       const [hash, parentsRaw, authorName, authorEmail, authoredAt, subject] = entry.split("\u001f");
       const parents = parentsRaw ? parentsRaw.split(" ").filter(Boolean) : [];
-
       return {
         hash,
         shortHash: hash.slice(0, 8),
@@ -211,11 +244,29 @@ function parseCommits(rawLog, refsByTarget) {
     });
 }
 
+async function getRemotes(context) {
+  try {
+    const rawRemotes = await runGit(context, ["remote", "-v"]);
+    if (!rawRemotes) return [];
+    const remotesMap = new Map();
+    for (const line of rawRemotes.split("\n")) {
+      const parts = line.split(/\s+/);
+      if (parts.length < 2) continue;
+      const [name, url] = parts;
+      remotesMap.set(name, { name, url });
+    }
+    return Array.from(remotesMap.values());
+  } catch {
+    return [];
+  }
+}
+
 async function loadRepoData(inputPath) {
   const context = await resolveGitContext(inputPath);
-  const [headRefName, headHash] = await Promise.all([
+  const [headRefName, headHash, remotes] = await Promise.all([
     runGit(context, ["symbolic-ref", "--quiet", "HEAD"]).catch(() => ""),
-    runGit(context, ["rev-parse", "HEAD"]).catch(() => "")
+    runGit(context, ["rev-parse", "HEAD"]).catch(() => ""),
+    getRemotes(context)
   ]);
 
   const rawRefs = await runGit(context, [
@@ -232,6 +283,7 @@ async function loadRepoData(inputPath) {
     map.set(ref.target, current);
     return map;
   }, new Map());
+
   const commitCount = Number.parseInt(await runGit(context, ["rev-list", "--all", "--count"]).catch(() => "0"), 10) || 0;
   const rawLog = commitCount > 0
     ? await runGit(context, [
@@ -249,14 +301,38 @@ async function loadRepoData(inputPath) {
     repoPath: context.repoPath,
     gitDir: context.gitDir,
     isBare: context.isBare,
+    isRemote: context.isRemote,
     headRefName,
     commits,
     refs,
+    remotes,
     stats: {
       commitCount: commits.length,
-      refCount: refs.length
+      refCount: refs.length,
+      remoteCount: remotes.length
     }
   };
+}
+
+async function loadCommitDiff(inputPath, hash) {
+  const context = await resolveGitContext(inputPath);
+  const [rawFiles, stat, patch] = await Promise.all([
+    runGit(context, ["show", "--name-status", "--pretty=format:", "-m", hash]).catch(() => ""),
+    runGit(context, ["show", "--stat", "--pretty=format:", "-m", hash]).catch(() => ""),
+    runGit(context, ["show", "--patch", "--pretty=format:", "-m", hash]).catch(() => "")
+  ]);
+
+  const files = [];
+  for (const line of rawFiles.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split("\t");
+    if (parts.length >= 2) {
+      files.push({ status: parts[0], path: parts[1] });
+    }
+  }
+
+  return { hash, files, stat: stat.trim(), patch: patch.trim() };
 }
 
 function sendJson(response, statusCode, payload) {
@@ -287,7 +363,6 @@ async function serveStatic(response, pathname) {
   try {
     const content = await fs.readFile(targetPath);
     const extension = path.extname(targetPath);
-
     response.writeHead(200, {
       "cache-control": "no-store",
       "content-type": mimeTypes[extension] || "application/octet-stream"
@@ -307,19 +382,41 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, payload);
     } catch (error) {
       sendJson(response, 400, {
-        error: error instanceof Error ? error.message : "Khong the doc repo Git.",
+        error: error instanceof Error ? error.message : "Unable to read repository.",
         defaultPath: defaultRepoPath,
         requestedPath: url.searchParams.get("repo") || defaultRepoPath
       });
     }
+    return;
+  }
 
+  if (request.method === "GET" && url.pathname === "/api/diff") {
+    try {
+      const hash = url.searchParams.get("hash");
+      if (!hash) throw new Error("Hash is required.");
+      const payload = await loadCommitDiff(url.searchParams.get("repo"), hash);
+      sendJson(response, 200, payload);
+    } catch (error) {
+      sendJson(response, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/fetch") {
+    try {
+      const context = await resolveGitContext(url.searchParams.get("repo"));
+      await runGit(context, ["fetch", "--all", "--prune"]);
+      sendJson(response, 200, { success: true });
+    } catch (error) {
+      sendJson(response, 400, {
+        error: error instanceof Error ? error.message : "Unable to fetch from remote."
+      });
+    }
     return;
   }
 
   if (request.method === "GET" && url.pathname === "/api/context") {
-    sendJson(response, 200, {
-      defaultPath: defaultRepoPath
-    });
+    sendJson(response, 200, { defaultPath: defaultRepoPath });
     return;
   }
 
@@ -332,5 +429,5 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Git graph viewer dang chay tai http://${host}:${port}`);
+  console.log(`Git Graph Web Viewer is running at http://${host}:${port}`);
 });

@@ -38,20 +38,23 @@ func FormatGraphPrefix(rawPrefix string) string {
 
 		switch r {
 		case '*':
-			// Thick bold commit node with prominent visibility
-			sb.WriteString(lipgloss.NewStyle().Foreground(color).Bold(true).Render("⬤"))
+			// Bullseye heavy commit node with prominent inner ring for clear visibility
+			sb.WriteString(lipgloss.NewStyle().Foreground(color).Bold(true).Render("⦿ "))
 		case '|':
-			// Heavy vertical branch line
-			sb.WriteString(st.Render("┃"))
+			// Extra thick vertical line
+			sb.WriteString(st.Render("┃ "))
 		case '/':
-			// Heavy diagonal branch fork/merge line
-			sb.WriteString(st.Render("╱"))
+			// Bold diagonal branch line
+			sb.WriteString(st.Render("╱ "))
 		case '\\':
-			sb.WriteString(st.Render("╲"))
+			// Bold diagonal branch line
+			sb.WriteString(st.Render("╲ "))
 		case '_':
-			sb.WriteString(st.Render("━"))
+			sb.WriteString(st.Render("━━"))
 		case '-':
-			sb.WriteString(st.Render("━"))
+			sb.WriteString(st.Render("━━"))
+		case ' ':
+			sb.WriteString("  ")
 		default:
 			sb.WriteRune(r)
 		}
