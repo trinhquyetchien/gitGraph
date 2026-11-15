@@ -172,6 +172,23 @@ function assignGraphColumns(commits) {
       .map((parentHash) => byHash.get(parentHash))
       .filter(Boolean);
   }
+
+  // 3. Detect Branch Creation Points (Điểm mốc tạo nhánh mới)
+  // Một commit được xem là mốc tạo nhánh (fork milestone) nếu:
+  // - Nhánh của nó khác nhánh của commit cha (parent), hoặc
+  // - Cha của nó có nhiều commit con rẽ nhánh.
+  for (const commit of commits) {
+    commit.isBranchCreation = false;
+    commit.branchCreatedFrom = null;
+
+    if (commit.inferredBranch && commit.parentCommits.length > 0) {
+      const p1 = commit.parentCommits[0];
+      if (p1.inferredBranch && p1.inferredBranch !== commit.inferredBranch) {
+        commit.isBranchCreation = true;
+        commit.branchCreatedFrom = p1.inferredBranch;
+      }
+    }
+  }
 }
 
 function createSvgNode(tagName, attributes = {}) {
@@ -273,13 +290,31 @@ function renderGraph(visibleCommits) {
       const toY = layout.top + parent.row * layout.rowHeight;
       const strokeColor = pIdx === 0 ? commit.color : parent.color;
 
-      edgeLayer.append(
-        createSvgNode("path", {
-          d: edgePath(fromX, fromY, toX, toY),
-          class: "graph-edge",
-          stroke: strokeColor
-        })
-      );
+      const pathId = `edge-${commit.hash.slice(0, 8)}-${parent.hash.slice(0, 8)}`;
+      const edgePathEl = createSvgNode("path", {
+        id: pathId,
+        d: edgePath(fromX, fromY, toX, toY),
+        class: "graph-edge",
+        stroke: strokeColor
+      });
+      edgeLayer.append(edgePathEl);
+
+      // Hiển thị tên nhánh chạy uốn dọc theo đường line (Text along path)
+      const edgeBranch = pIdx === 0 ? commit.inferredBranch : parent.inferredBranch;
+      if (edgeBranch) {
+        const textAlongPath = createSvgNode("text", {
+          class: "edge-branch-label",
+          dy: -6
+        });
+        const textPath = createSvgNode("textPath", {
+          href: `#${pathId}`,
+          startOffset: "50%",
+          "text-anchor": "middle"
+        });
+        textPath.textContent = `— ${edgeBranch} —`;
+        textAlongPath.append(textPath);
+        labelLayer.append(textAlongPath);
+      }
     }
 
     // --- CỘT BÊN TRÁI: Branch Name & Ref Tags (Căn về phía line đồ thị ở giữa) ---
@@ -379,6 +414,36 @@ function renderGraph(visibleCommits) {
     });
     meta.textContent = `${commit.shortHash} • ${commit.authorName} • ${dateStr}`;
     labelLayer.append(meta);
+
+    // Mốc tạo nhánh (Branch Creation Milestone):
+    // Đánh dấu commit khởi nguồn khi một nhánh mới được tách ra từ nhánh cha
+    if (commit.isBranchCreation && commit.branchCreatedFrom) {
+      const milestoneGroup = createSvgNode("g", {
+        transform: `translate(${fromX + 16}, ${fromY - 14})`,
+        class: "branch-milestone-badge"
+      });
+
+      const milestoneText = `★ Mốc tạo nhánh '${commit.inferredBranch}' từ '${commit.branchCreatedFrom}'`;
+      const mTextWidth = Math.max(90, milestoneText.length * 6.8 + 18);
+
+      milestoneGroup.append(
+        createSvgNode("rect", {
+          width: mTextWidth,
+          height: 20,
+          rx: 4,
+          class: "milestone-rect"
+        })
+      );
+
+      const mText = createSvgNode("text", {
+        x: mTextWidth / 2,
+        y: 11,
+        class: "milestone-text"
+      });
+      mText.textContent = milestoneText;
+      milestoneGroup.append(mText);
+      labelLayer.append(milestoneGroup);
+    }
 
     // Commit Node Group (Regular Circle vs Merge Diamond)
     const isMerge = commit.parents && commit.parents.length > 1;

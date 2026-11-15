@@ -471,6 +471,47 @@ body {
   pointer-events: none;
 }
 
+/* Branch name running along the curved line */
+.edge-branch-label {
+  font-family: var(--font-code);
+  font-size: 9.5px;
+  font-weight: 700;
+  fill: var(--text-muted);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* Branch Creation Milestone Badge */
+.branch-milestone-badge {
+  pointer-events: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.25));
+}
+
+.milestone-rect {
+  fill: #854d0e;
+  stroke: #facc15;
+  stroke-width: 1.5px;
+}
+
+[data-theme="light"] .milestone-rect {
+  fill: #fef08a;
+  stroke: #ca8a04;
+}
+
+.milestone-text {
+  font-family: var(--font-code);
+  font-size: 10.5px;
+  font-weight: 700;
+  fill: #fef08a;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+[data-theme="light"] .milestone-text {
+  fill: #713f12;
+}
+
 /* Branch name on the side of DAG line */
 .lane-branch-tag {
   pointer-events: none;
