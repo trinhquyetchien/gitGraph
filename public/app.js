@@ -84,68 +84,26 @@ function firstEmptySlot(slots) {
 
 /**
  * Intelligent DAG Column & Color Allocation:
- * Mỗi khi nhánh rẽ (branch fork), nhánh mới được cấp một Lane riêng
- * và một MÃ MÀU MỚI RIÊNG BIỆT độc lập với nhánh chính.
+ * Phân bổ cột (lane) và màu sắc chuyên biệt cho từng nhánh:
+ * - Nhánh chính (main / master) luôn chạy trên Cột 0.
+ * - Khi một nhánh mới được tạo (VD: develop, feature/...), nhánh đó rẽ sang Cột 1, Cột 2...
+ * - Đường nối từ nhánh con về commit gốc của nhánh cha là một ĐƯỜNG CONG UỐN LƯỢN RÕ RỆT (S-curve fork).
  */
 function assignGraphColumns(commits) {
-  const lanes = []; // commit hash expected on lane
-  const laneColors = []; // colorIndex assigned to lane
   const byHash = new Map();
-  let nextColorIndex = 0;
-
   for (const [row, commit] of commits.entries()) {
-    byHash.set(commit.hash, commit);
     commit.row = row;
-
-    let col = lanes.indexOf(commit.hash);
-    let colorIdx;
-
-    if (col === -1) {
-      col = firstEmptySlot(lanes);
-      colorIdx = nextColorIndex++;
-      lanes[col] = commit.hash;
-      laneColors[col] = colorIdx;
-    } else {
-      colorIdx = laneColors[col];
-    }
-
-    commit.column = col;
-    commit.colorIndex = colorIdx;
-    commit.color = getLaneColor(colorIdx);
-
-    lanes[col] = null;
-
-    if (commit.parents.length === 0) {
-      lanes[col] = null;
-      laneColors[col] = null;
-    } else {
-      const firstParent = commit.parents[0];
-      const existingFirstCol = lanes.indexOf(firstParent);
-
-      if (existingFirstCol === -1 || existingFirstCol === col) {
-        lanes[col] = firstParent;
-        laneColors[col] = colorIdx;
-      }
-
-      // Subsequent parents (branch forks) get NEW DISTINCT COLORS & LANES
-      for (const parentHash of commit.parents.slice(1)) {
-        if (lanes.includes(parentHash)) continue;
-        const newCol = firstEmptySlot(lanes);
-        const forkColor = nextColorIndex++;
-        lanes[newCol] = parentHash;
-        laneColors[newCol] = forkColor;
-      }
-    }
-
-    while (lanes.length > 0 && lanes.at(-1) === null) {
-      lanes.pop();
-      laneColors.pop();
-    }
+    byHash.set(commit.hash, commit);
   }
 
-  // Propagate inferred branch names along commit lineages
+  for (const commit of commits) {
+    commit.parentCommits = commit.parents
+      .map((parentHash) => byHash.get(parentHash))
+      .filter(Boolean);
+  }
+
+  // 1. Lan truyền tên nhánh theo phả hệ first-parent
   const branchMap = new Map();
-  // 1. Seed with explicit branch refs (prefer local branch over remote)
   for (const commit of commits) {
     const localBranch = commit.refs.find((r) => r.type === "branch");
     const remoteBranch = commit.refs.find((r) => r.type === "remote");
@@ -155,7 +113,6 @@ function assignGraphColumns(commits) {
     }
   }
 
-  // 2. Propagate down first-parent chain
   for (const commit of commits) {
     const currentBranch = branchMap.get(commit.hash);
     if (currentBranch && commit.parents.length > 0) {
@@ -167,21 +124,49 @@ function assignGraphColumns(commits) {
   }
 
   for (const commit of commits) {
-    commit.inferredBranch = branchMap.get(commit.hash) || "";
-    commit.parentCommits = commit.parents
-      .map((parentHash) => byHash.get(parentHash))
-      .filter(Boolean);
+    commit.inferredBranch = branchMap.get(commit.hash) || "main";
   }
 
-  // 3. Detect Branch Creation Points (Điểm mốc tạo nhánh mới)
-  // Một commit được xem là mốc tạo nhánh (fork milestone) nếu:
-  // - Nhánh của nó khác nhánh của commit cha (parent), hoặc
-  // - Cha của nó có nhiều commit con rẽ nhánh.
+  // 2. Định danh các nhánh và cấp Lane riêng biệt cho từng nhánh
+  // Nhánh chính 'main' / 'master' luôn được ưu tiên cột 0 (cột thân cây)
+  const branchColMap = new Map();
+  const branchColorMap = new Map();
+  let nextCol = 0;
+  let nextColorIndex = 0;
+
+  const allBranchNames = Array.from(new Set(Array.from(branchMap.values())));
+  if (allBranchNames.includes("main")) {
+    branchColMap.set("main", nextCol++);
+    branchColorMap.set("main", nextColorIndex++);
+  } else if (allBranchNames.includes("master")) {
+    branchColMap.set("master", nextCol++);
+    branchColorMap.set("master", nextColorIndex++);
+  }
+
+  for (const b of allBranchNames) {
+    if (!branchColMap.has(b)) {
+      branchColMap.set(b, nextCol++);
+      branchColorMap.set(b, nextColorIndex++);
+    }
+  }
+
+  // Gán column & color cho từng commit
+  for (const commit of commits) {
+    const bName = commit.inferredBranch || "main";
+    const col = branchColMap.has(bName) ? branchColMap.get(bName) : 0;
+    const colorIdx = branchColorMap.has(bName) ? branchColorMap.get(bName) : 0;
+
+    commit.column = col;
+    commit.colorIndex = colorIdx;
+    commit.color = getLaneColor(colorIdx);
+  }
+
+  // 3. Nhận diện điểm mốc rẽ nhánh (Fork Milestone)
   for (const commit of commits) {
     commit.isBranchCreation = false;
     commit.branchCreatedFrom = null;
 
-    if (commit.inferredBranch && commit.parentCommits.length > 0) {
+    if (commit.parentCommits.length > 0) {
       const p1 = commit.parentCommits[0];
       if (p1.inferredBranch && p1.inferredBranch !== commit.inferredBranch) {
         commit.isBranchCreation = true;
