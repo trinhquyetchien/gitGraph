@@ -1,40 +1,53 @@
+// Vibrant High-Contrast Colors for Branch Lines
 const LANE_COLORS = [
-  "#d9480f",
-  "#1c7ed6",
-  "#2b8a3e",
-  "#c2255c",
-  "#5f3dc4",
-  "#087f5b",
-  "#e67700",
-  "#364fc7"
+  "#00f0ff", // Neon Cyan
+  "#ff2a85", // Electric Pink
+  "#ffb800", // Warm Gold
+  "#00ff85", // Mint Green
+  "#bd00ff", // Royal Purple
+  "#3b82f6", // Sapphire Blue
+  "#ff6b00", // Radiant Orange
+  "#00e5ff", // Vivid Turquoise
+  "#f43f5e", // Rose Red
+  "#84cc16"  // Lime Green
 ];
 
 const layout = {
-  top: 44,
-  left: 56,
-  rowHeight: 80,
-  laneWidth: 72,
-  rightPadding: 520,
-  bottom: 56
+  top: 40,
+  left: 48,
+  rowHeight: 64, // Comfortable row height
+  laneWidth: 36,  // Lane width for distinct columns
+  rightPadding: 400,
+  bottom: 48
 };
 
 const state = {
   data: null,
-  selectedHash: null
+  selectedHash: null,
+  diffCache: new Map(),
+  filters: {
+    query: "",
+    headOnly: false
+  }
 };
 
+// DOM Elements
 const form = document.querySelector("#repo-form");
 const repoPathInput = document.querySelector("#repo-path");
-const refreshButton = document.querySelector("#refresh-button");
+const refreshBtn = document.querySelector("#refresh-btn");
+const fetchBtn = document.querySelector("#fetch-btn");
 const statusBanner = document.querySelector("#status-banner");
-const repoMeta = document.querySelector("#repo-meta");
+const repoStats = document.querySelector("#repo-stats");
+const commitSearchInput = document.querySelector("#commit-search");
+const headOnlyToggle = document.querySelector("#head-only-toggle");
 const graphEmpty = document.querySelector("#graph-empty");
 const graphScroll = document.querySelector("#graph-scroll");
 const graphSvg = document.querySelector("#graph-svg");
-const detailsPane = document.querySelector("#details-pane");
+const inspectorContent = document.querySelector("#inspector-content");
+const selectedShortHash = document.querySelector("#selected-short-hash");
 
 function escapeHtml(value) {
-  return value
+  return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -55,13 +68,13 @@ function firstEmptyLane(lanes) {
   return index === -1 ? lanes.length : index;
 }
 
+// Compute DAG columns for branch separation
 function assignGraphColumns(commits) {
   const lanes = [];
   const byHash = new Map();
 
   for (const [row, commit] of commits.entries()) {
     let column = lanes.indexOf(commit.hash);
-
     if (column === -1) {
       column = firstEmptyLane(lanes);
     }
@@ -87,10 +100,7 @@ function assignGraphColumns(commits) {
           : null;
 
       for (const parentHash of commit.parents.slice(1)) {
-        if (lanes.includes(parentHash)) {
-          continue;
-        }
-
+        if (lanes.includes(parentHash)) continue;
         lanes[firstEmptyLane(lanes)] = parentHash;
       }
     }
@@ -109,111 +119,91 @@ function assignGraphColumns(commits) {
 
 function createSvgNode(tagName, attributes = {}) {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tagName);
-
   for (const [name, value] of Object.entries(attributes)) {
     node.setAttribute(name, String(value));
   }
-
   return node;
 }
 
+// Smooth curved path between commit nodes
 function edgePath(fromX, fromY, toX, toY) {
   if (fromX === toX) {
     return `M ${fromX} ${fromY} L ${toX} ${toY}`;
   }
-
-  const bend = Math.min(56, Math.max(24, Math.abs(toY - fromY) / 2));
+  const bend = Math.min(48, Math.max(20, Math.abs(toY - fromY) / 2));
   return `M ${fromX} ${fromY} C ${fromX} ${fromY + bend} ${toX} ${toY - bend} ${toX} ${toY}`;
 }
 
-function renderMeta(data) {
-  const items = [
-    { label: "Repo", value: data.repoPath },
-    { label: "Git dir", value: data.gitDir },
-    { label: "Commits", value: String(data.stats.commitCount) },
-    { label: "Refs", value: String(data.stats.refCount) }
-  ];
-
-  repoMeta.innerHTML = items
-    .map(
-      (item) => `
-        <article class="meta-card">
-          <p>${escapeHtml(item.label)}</p>
-          <strong>${escapeHtml(item.value)}</strong>
-        </article>
-      `
-    )
-    .join("");
-}
-
-function renderDetails(commit) {
-  if (!commit) {
-    detailsPane.innerHTML = "<p>Chon mot node de xem hash, refs, author va parent commits.</p>";
-    return;
-  }
-
-  const refMarkup = commit.refs.length
-    ? commit.refs
-        .map(
-          (ref) => `<span class="ref-pill ${escapeHtml(ref.type)}">${escapeHtml(ref.shortName)}</span>`
-        )
-        .join("")
-    : "<span class=\"muted\">Khong co ref tro truc tiep vao commit nay.</span>";
-  const parentMarkup = commit.parents.length
-    ? commit.parents
-        .map((parentHash) => `<code>${escapeHtml(parentHash.slice(0, 8))}</code>`)
-        .join(" ")
-    : "<span class=\"muted\">Root commit</span>";
-
-  detailsPane.innerHTML = `
-    <article class="details-card">
-      <p class="details-hash">${escapeHtml(commit.hash)}</p>
-      <h3>${escapeHtml(commit.subject || "(khong co subject)")}</h3>
-      <p class="details-author">${escapeHtml(commit.authorName)} &lt;${escapeHtml(commit.authorEmail)}&gt;</p>
-      <p class="details-time">${escapeHtml(new Date(commit.authoredAt).toLocaleString())}</p>
-      <div class="details-group">
-        <p class="details-label">Refs</p>
-        <div class="ref-wrap">${refMarkup}</div>
-      </div>
-      <div class="details-group">
-        <p class="details-label">Parents</p>
-        <div class="parent-wrap">${parentMarkup}</div>
-      </div>
-    </article>
+function renderStats(data) {
+  repoStats.innerHTML = `
+    <span>Commits: <strong>${data.stats.commitCount}</strong></span>
+    <span>•</span>
+    <span>HEAD: <strong>${escapeHtml(data.headRefName ? data.headRefName.replace(/^refs\/heads\//, '') : 'DETACHED')}</strong></span>
+    <span>•</span>
+    <span>Branches: <strong>${data.stats.refCount}</strong></span>
   `;
 }
 
-function renderGraph(data) {
-  const commits = data.commits;
+function getVisibleCommits(data) {
+  if (!data || !data.commits) return [];
+  const q = state.filters.query.trim().toLowerCase();
 
-  if (commits.length === 0) {
+  return data.commits.filter((c) => {
+    if (q) {
+      const match =
+        c.hash.toLowerCase().includes(q) ||
+        c.subject.toLowerCase().includes(q) ||
+        c.authorName.toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    return true;
+  });
+}
+
+function renderGraph(visibleCommits) {
+  if (!visibleCommits || visibleCommits.length === 0) {
     graphSvg.innerHTML = "";
-    graphScroll.classList.add("hidden");
     graphEmpty.classList.remove("hidden");
     return;
   }
 
   graphEmpty.classList.add("hidden");
-  graphScroll.classList.remove("hidden");
+  assignGraphColumns(visibleCommits);
 
-  const maxColumn = Math.max(...commits.map((commit) => commit.column), 0);
-  const width = layout.left + (maxColumn + 1) * layout.laneWidth + layout.rightPadding;
-  const height = layout.top + Math.max(1, commits.length - 1) * layout.rowHeight + layout.bottom;
+  const maxColumn = Math.max(...visibleCommits.map((c) => c.column), 0);
+  const laneBlockWidth = (maxColumn + 1) * layout.laneWidth;
+  const contentStartX = layout.left + laneBlockWidth + 24;
+
+  const width = Math.max(1200, contentStartX + 800);
+  const height = layout.top + (visibleCommits.length - 1) * layout.rowHeight + layout.bottom;
 
   graphSvg.innerHTML = "";
   graphSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   graphSvg.setAttribute("width", width);
   graphSvg.setAttribute("height", height);
 
+  const rowBgLayer = createSvgNode("g", { class: "row-bg-layer" });
   const edgeLayer = createSvgNode("g", { class: "edge-layer" });
   const labelLayer = createSvgNode("g", { class: "label-layer" });
   const nodeLayer = createSvgNode("g", { class: "node-layer" });
-  const subjectX = layout.left + (maxColumn + 1) * layout.laneWidth + 36;
 
-  for (const commit of commits) {
+  for (const commit of visibleCommits) {
     const fromX = layout.left + commit.column * layout.laneWidth;
     const fromY = layout.top + commit.row * layout.rowHeight;
+    const isSelected = commit.hash === state.selectedHash;
 
+    // Row full-width clickable background
+    const rowBg = createSvgNode("rect", {
+      x: 0,
+      y: fromY - layout.rowHeight / 2,
+      width: width,
+      height: layout.rowHeight,
+      class: `commit-row-bg ${isSelected ? "selected" : ""}`
+    });
+    rowBg.addEventListener("click", () => selectCommit(commit.hash));
+    rowBgLayer.append(rowBg);
+
+    // Edges to parents
     for (const parent of commit.parentCommits) {
       const toX = layout.left + parent.column * layout.laneWidth;
       const toY = layout.top + parent.row * layout.rowHeight;
@@ -227,171 +217,269 @@ function renderGraph(data) {
       );
     }
 
+    // Ref Badges (Branch/Tag pills)
+    let currentContentX = contentStartX;
     if (commit.refs.length > 0) {
-      let labelX = fromX + 22;
-
+      let badgeX = contentStartX;
       for (const ref of commit.refs) {
-        const pillWidth = Math.max(56, ref.shortName.length * 8 + 24);
+        const textLen = ref.shortName.length;
+        const pillWidth = Math.max(48, textLen * 7.5 + 20);
+
         const refGroup = createSvgNode("g", {
-          transform: `translate(${labelX}, ${fromY - 16})`
+          transform: `translate(${badgeX}, ${fromY - 20})`
         });
 
         refGroup.append(
           createSvgNode("rect", {
             width: pillWidth,
-            height: 24,
-            rx: 12,
+            height: 20,
             class: `ref-tag-svg ${ref.type}`
           })
         );
-        refGroup.append(
-          createSvgNode("text", {
-            x: pillWidth / 2,
-            y: 16,
-            class: "ref-tag-text"
-          })
-        );
-        refGroup.lastChild.textContent = ref.shortName;
+
+        const refText = createSvgNode("text", {
+          x: pillWidth / 2,
+          y: 11,
+          class: "ref-tag-text"
+        });
+        refText.textContent = ref.shortName;
+        refGroup.append(refText);
         labelLayer.append(refGroup);
-        labelX += pillWidth + 8;
+
+        badgeX += pillWidth + 6;
       }
+      currentContentX = badgeX + 8;
     }
 
+    // Subject text
     const subject = createSvgNode("text", {
-      x: subjectX,
-      y: fromY + 5,
+      x: currentContentX,
+      y: fromY - 6,
       class: "commit-subject"
     });
-    subject.textContent = commit.subject || "(khong co subject)";
+    subject.textContent = commit.subject || "(no subject)";
     labelLayer.append(subject);
 
+    // Meta text (Hash | Author | Date)
     const meta = createSvgNode("text", {
-      x: subjectX,
-      y: fromY + 28,
+      x: currentContentX,
+      y: fromY + 14,
       class: "commit-meta"
     });
-    meta.textContent = `${commit.shortHash}  ${new Date(commit.authoredAt).toLocaleString()}  ${commit.authorName}`;
+    const dateStr = new Date(commit.authoredAt).toLocaleString("vi-VN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    meta.textContent = `${commit.shortHash} • ${commit.authorName} • ${dateStr}`;
     labelLayer.append(meta);
 
-    const hitArea = createSvgNode("g", {
-      class: `commit-node ${state.selectedHash === commit.hash ? "selected" : ""}`,
-      "data-hash": commit.hash,
-      tabindex: 0
+    // Node group (Outer Glow + Center Circle)
+    const nodeGroup = createSvgNode("g", {
+      class: `commit-node ${isSelected ? "selected" : ""}`,
+      "data-hash": commit.hash
     });
 
-    hitArea.append(
+    // Hit test circle
+    nodeGroup.append(
       createSvgNode("circle", {
         cx: fromX,
         cy: fromY,
-        r: 16,
+        r: 18,
         class: "node-hit"
       })
     );
-    hitArea.append(
+
+    // Outer glow ring
+    nodeGroup.append(
       createSvgNode("circle", {
         cx: fromX,
         cy: fromY,
-        r: 10,
+        r: 8,
+        stroke: commit.color,
+        class: "node-glow"
+      })
+    );
+
+    // Inner bright core
+    nodeGroup.append(
+      createSvgNode("circle", {
+        cx: fromX,
+        cy: fromY,
+        r: 6,
         fill: commit.color,
         class: "node-core"
       })
     );
-    hitArea.append(
-      createSvgNode("circle", {
-        cx: fromX,
-        cy: fromY,
-        r: 4,
-        class: "node-center"
-      })
-    );
-    hitArea.addEventListener("click", () => selectCommit(commit.hash));
-    hitArea.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        selectCommit(commit.hash);
-      }
-    });
-    nodeLayer.append(hitArea);
+
+    nodeGroup.addEventListener("click", () => selectCommit(commit.hash));
+    nodeLayer.append(nodeGroup);
   }
 
-  graphSvg.append(edgeLayer, labelLayer, nodeLayer);
+  graphSvg.append(rowBgLayer, edgeLayer, labelLayer, nodeLayer);
 }
 
-function render() {
-  if (!state.data) {
-    renderMeta({
-      repoPath: "-",
-      gitDir: "-",
-      stats: { commitCount: 0, refCount: 0 }
-    });
-    renderGraph({ commits: [] });
-    renderDetails(null);
+// Format diff lines with syntax styling
+function formatDiffHtml(rawDiff) {
+  if (!rawDiff) return `<div class="diff-line">Không có thay đổi hoặc commit khởi tạo.</div>`;
+
+  const lines = rawDiff.split("\n");
+  return lines
+    .map((line) => {
+      let lineClass = "";
+      if (line.startsWith("+") && !line.startsWith("+++")) {
+        lineClass = "add";
+      } else if (line.startsWith("-") && !line.startsWith("---")) {
+        lineClass = "del";
+      } else if (line.startsWith("@@")) {
+        lineClass = "hunk";
+      }
+      return `<div class="diff-line ${lineClass}">${escapeHtml(line)}</div>`;
+    })
+    .join("");
+}
+
+async function renderCommitDetails(commit) {
+  if (!commit) {
+    selectedShortHash.textContent = "";
+    inspectorContent.innerHTML = `<p class="placeholder-text">Chọn một commit để xem chi tiết.</p>`;
     return;
   }
 
-  renderMeta(state.data);
-  renderGraph(state.data);
-  const selectedCommit =
-    state.data.commits.find((commit) => commit.hash === state.selectedHash) || state.data.commits[0] || null;
+  selectedShortHash.textContent = commit.shortHash;
 
-  if (selectedCommit && state.selectedHash !== selectedCommit.hash) {
-    state.selectedHash = selectedCommit.hash;
-    renderGraph(state.data);
+  // Render header card first
+  inspectorContent.innerHTML = `
+    <div class="commit-header-card">
+      <div class="commit-title">${escapeHtml(commit.subject)}</div>
+      <div class="commit-author-time">
+        <span>Tác giả: <strong>${escapeHtml(commit.authorName)}</strong> &lt;${escapeHtml(commit.authorEmail)}&gt;</span>
+        <span>Thời gian: ${escapeHtml(new Date(commit.authoredAt).toLocaleString())}</span>
+      </div>
+      <div class="full-hash" title="Click để copy">${escapeHtml(commit.hash)}</div>
+    </div>
+    <div id="diff-section-loading" class="placeholder-text">Đang tải diff chi tiết...</div>
+  `;
+
+  // Fetch Diff asynchronously
+  let diffData = state.diffCache.get(commit.hash);
+  if (!diffData) {
+    try {
+      const repoPath = repoPathInput.value.trim();
+      const res = await fetch(`/api/diff?repo=${encodeURIComponent(repoPath)}&hash=${commit.hash}`);
+      diffData = await res.json();
+      state.diffCache.set(commit.hash, diffData);
+    } catch {
+      diffData = { files: [], diff: "Lỗi tải diff." };
+    }
   }
 
-  renderDetails(selectedCommit);
+  // Render file list and diff body
+  const filesHtml = diffData.files && diffData.files.length > 0
+    ? `
+      <div class="section-title">Files thay đổi (${diffData.files.length})</div>
+      <div class="file-list">
+        ${diffData.files
+          .map(
+            (f) => `
+          <div class="file-item">
+            <span class="file-badge ${f.status}">${f.status}</span>
+            <span class="file-name">${escapeHtml(f.path)}</span>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    `
+    : "";
+
+  const diffHtml = `
+    <div class="section-title">Git Diff</div>
+    <div class="diff-container">
+      <div class="diff-body">${formatDiffHtml(diffData.diff)}</div>
+    </div>
+  `;
+
+  const loadingEl = document.querySelector("#diff-section-loading");
+  if (loadingEl) {
+    loadingEl.outerHTML = filesHtml + diffHtml;
+  }
 }
 
 function selectCommit(hash) {
   state.selectedHash = hash;
-  render();
-}
-
-async function loadContext() {
-  const response = await fetch("/api/context");
-  const payload = await response.json();
-  repoPathInput.value = payload.defaultPath;
+  const visible = getVisibleCommits(state.data);
+  renderGraph(visible);
+  const commit = visible.find((c) => c.hash === hash);
+  renderCommitDetails(commit);
 }
 
 async function loadRepo(repoPath) {
-  setStatus("Dang nap commit graph...", "loading");
+  setStatus("Đang tải dữ liệu repository...", "loading");
 
   try {
     const params = new URLSearchParams();
+    if (repoPath) params.set("repo", repoPath);
 
-    if (repoPath) {
-      params.set("repo", repoPath);
+    const res = await fetch(`/api/repo?${params.toString()}`);
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || "Không thể tải repo.");
+
+    state.data = data;
+    repoPathInput.value = data.requestedPath;
+    renderStats(data);
+
+    const visible = getVisibleCommits(data);
+    state.selectedHash = visible[0]?.hash || null;
+    renderGraph(visible);
+
+    if (visible[0]) {
+      renderCommitDetails(visible[0]);
     }
 
-    const response = await fetch(`/api/repo?${params.toString()}`);
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload.error || "Khong the nap du lieu repo.");
-    }
-
-    assignGraphColumns(payload.commits);
-    state.data = payload;
-    state.selectedHash = payload.commits[0]?.hash || null;
-    repoPathInput.value = payload.requestedPath;
-    setStatus(`Da nap ${payload.stats.commitCount} commit tu ${payload.repoPath}`, "success");
-    render();
-  } catch (error) {
+    setStatus(`Đã tải ${data.stats.commitCount} commits từ ${data.repoPath}`, "success");
+  } catch (err) {
     state.data = null;
     state.selectedHash = null;
-    setStatus(error instanceof Error ? error.message : "Khong the nap repo Git.", "error");
-    render();
+    renderGraph([]);
+    renderCommitDetails(null);
+    setStatus(err.message, "error");
   }
 }
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
+// Event Listeners
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
   loadRepo(repoPathInput.value.trim());
 });
 
-refreshButton.addEventListener("click", () => {
+refreshBtn.addEventListener("click", () => {
   loadRepo(repoPathInput.value.trim());
 });
 
-await loadContext();
-await loadRepo(repoPathInput.value.trim());
+commitSearchInput.addEventListener("input", () => {
+  state.filters.query = commitSearchInput.value;
+  const visible = getVisibleCommits(state.data);
+  renderGraph(visible);
+});
+
+fetchBtn.addEventListener("click", async () => {
+  const repoPath = repoPathInput.value.trim();
+  setStatus("Đang fetch từ remotes...", "loading");
+  try {
+    const res = await fetch(`/api/fetch?repo=${encodeURIComponent(repoPath)}`, { method: "POST" });
+    if (!res.ok) throw new Error("Fetch thất bại.");
+    await loadRepo(repoPath);
+  } catch (err) {
+    setStatus(err.message, "error");
+  }
+});
+
+// Init
+const contextRes = await fetch("/api/context");
+const context = await contextRes.json();
+repoPathInput.value = context.defaultPath;
+await loadRepo(context.defaultPath);
