@@ -319,6 +319,12 @@ body {
   flex: 1;
   overflow: auto;
   position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+#graph-svg {
+  margin: 0 auto;
 }
 
 .graph-empty {
@@ -470,6 +476,67 @@ body {
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;
+}
+
+/* Centered Timeline Connectors */
+.timeline-connector {
+  stroke-width: 1.5px;
+  stroke-dasharray: 3 3;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Centered Timeline Card Styling */
+.timeline-card {
+  pointer-events: none;
+  transition: transform var(--transition-fast);
+}
+
+.card-rect {
+  fill: var(--bg-panel);
+  stroke: var(--border-light);
+  stroke-width: 1px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
+}
+
+[data-theme="dark"] .card-rect {
+  fill: rgba(17, 24, 39, 0.85);
+  stroke: rgba(55, 65, 81, 0.6);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+}
+
+.commit-row-bg.selected + .edge-layer ~ .card-layer .commit-info-card .card-rect {
+  stroke: var(--accent-primary);
+  stroke-width: 1.5px;
+}
+
+.card-commit-subject {
+  fill: var(--text-main);
+  font-family: var(--font-main);
+  font-size: 13px;
+  font-weight: 600;
+  dominant-baseline: middle;
+}
+
+.card-commit-meta {
+  fill: var(--text-muted);
+  font-family: var(--font-code);
+  font-size: 10.5px;
+  dominant-baseline: middle;
+}
+
+/* Stream tag for empty opposite side */
+.stream-tag-rect {
+  fill: rgba(56, 189, 248, 0.08);
+  stroke-width: 1px;
+}
+
+.stream-tag-text {
+  font-family: var(--font-code);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
 }
 
 /* Branch name running along the curved line */
