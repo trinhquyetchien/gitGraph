@@ -40,11 +40,11 @@ if [ -z "$TARGET_DIR" ]; then
   fi
 fi
 
-# Detect terminal emulator
-if command -v gnome-terminal >/dev/null 2>&1; then
+# Prioritize Wezterm with user's shell (zsh)
+if command -v wezterm >/dev/null 2>&1; then
+  exec wezterm start --always-new-process --title "Git Graph" "$HOME/.local/bin/gitgraph" "$TARGET_DIR"
+elif command -v gnome-terminal >/dev/null 2>&1; then
   exec gnome-terminal --title="Git Graph" -- "$HOME/.local/bin/gitgraph" "$TARGET_DIR"
-elif command -v wezterm >/dev/null 2>&1; then
-  exec wezterm start --title "Git Graph" "$HOME/.local/bin/gitgraph" "$TARGET_DIR"
 elif command -v x-terminal-emulator >/dev/null 2>&1; then
   exec x-terminal-emulator -T "Git Graph" -e "$HOME/.local/bin/gitgraph" "$TARGET_DIR"
 else

@@ -624,9 +624,9 @@ func (m StateModel) renderLeftPanel(width, height int) string {
 			graphPart = graph.FormatGraphPrefix(c.GraphPrefix)
 		} else {
 			dotColor := laneColors[c.ColorIndex%len(laneColors)]
-			dot := lipgloss.NewStyle().Foreground(dotColor).Bold(true).Render("⬤")
+			dot := lipgloss.NewStyle().Foreground(dotColor).Bold(true).Render("⦿ ")
 			indent := strings.Repeat("┃ ", c.Column)
-			graphPart = indent + dot + " "
+			graphPart = indent + dot
 		}
 
 		// Ref badges
