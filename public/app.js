@@ -14,9 +14,9 @@ const LANE_COLORS = [
 
 const layout = {
   top: 40,
-  left: 48,
+  left: 64,
   rowHeight: 64,
-  laneWidth: 38,
+  laneWidth: 44,
   bottom: 48
 };
 
@@ -143,7 +143,31 @@ function assignGraphColumns(commits) {
     }
   }
 
+  // Propagate inferred branch names along commit lineages
+  const branchMap = new Map();
+  // 1. Seed with explicit branch refs (prefer local branch over remote)
   for (const commit of commits) {
+    const localBranch = commit.refs.find((r) => r.type === "branch");
+    const remoteBranch = commit.refs.find((r) => r.type === "remote");
+    const targetRef = localBranch || remoteBranch;
+    if (targetRef) {
+      branchMap.set(commit.hash, targetRef.shortName.replace(/^origin\//, ""));
+    }
+  }
+
+  // 2. Propagate down first-parent chain
+  for (const commit of commits) {
+    const currentBranch = branchMap.get(commit.hash);
+    if (currentBranch && commit.parents.length > 0) {
+      const p1 = commit.parents[0];
+      if (!branchMap.has(p1)) {
+        branchMap.set(p1, currentBranch);
+      }
+    }
+  }
+
+  for (const commit of commits) {
+    commit.inferredBranch = branchMap.get(commit.hash) || "";
     commit.parentCommits = commit.parents
       .map((parentHash) => byHash.get(parentHash))
       .filter(Boolean);
@@ -249,6 +273,24 @@ function renderGraph(visibleCommits) {
           stroke: strokeColor
         })
       );
+    }
+
+    // Branch Name Tag placed right next to the line/node
+    if (commit.inferredBranch) {
+      const branchLabel = createSvgNode("g", {
+        transform: `translate(${fromX - 16}, ${fromY})`,
+        class: "lane-branch-tag"
+      });
+
+      const bText = createSvgNode("text", {
+        x: -4,
+        y: 4,
+        class: "lane-branch-text",
+        fill: commit.color
+      });
+      bText.textContent = commit.inferredBranch;
+      branchLabel.append(bText);
+      labelLayer.append(branchLabel);
     }
 
     // Ref Badges (Pill style with icons)
