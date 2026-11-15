@@ -73,53 +73,73 @@ function setStatus(message, tone = "loading") {
   statusBanner.className = `status-banner ${tone}`;
 }
 
-function laneColor(column) {
-  return LANE_COLORS[column % LANE_COLORS.length];
+function getLaneColor(colorIndex) {
+  return LANE_COLORS[colorIndex % LANE_COLORS.length];
 }
 
-function firstEmptyLane(lanes) {
-  const index = lanes.findIndex((lane) => lane === null);
-  return index === -1 ? lanes.length : index;
+function firstEmptySlot(slots) {
+  const index = slots.findIndex((s) => s === null);
+  return index === -1 ? slots.length : index;
 }
 
+/**
+ * Intelligent DAG Column & Color Allocation:
+ * Mỗi khi nhánh rẽ (branch fork), nhánh mới được cấp một Lane riêng
+ * và một MÃ MÀU MỚI RIÊNG BIỆT độc lập với nhánh chính.
+ */
 function assignGraphColumns(commits) {
-  const lanes = [];
+  const lanes = []; // commit hash expected on lane
+  const laneColors = []; // colorIndex assigned to lane
   const byHash = new Map();
+  let nextColorIndex = 0;
 
   for (const [row, commit] of commits.entries()) {
-    let column = lanes.indexOf(commit.hash);
-    if (column === -1) {
-      column = firstEmptyLane(lanes);
-    }
-
-    commit.row = row;
-    commit.column = column;
-    commit.color = laneColor(column);
     byHash.set(commit.hash, commit);
+    commit.row = row;
 
-    if (lanes[column] === commit.hash) {
-      lanes[column] = null;
+    let col = lanes.indexOf(commit.hash);
+    let colorIdx;
+
+    if (col === -1) {
+      col = firstEmptySlot(lanes);
+      colorIdx = nextColorIndex++;
+      lanes[col] = commit.hash;
+      laneColors[col] = colorIdx;
+    } else {
+      colorIdx = laneColors[col];
     }
+
+    commit.column = col;
+    commit.colorIndex = colorIdx;
+    commit.color = getLaneColor(colorIdx);
+
+    lanes[col] = null;
 
     if (commit.parents.length === 0) {
-      lanes[column] = null;
+      lanes[col] = null;
+      laneColors[col] = null;
     } else {
       const firstParent = commit.parents[0];
-      const existingFirstParentLane = lanes.indexOf(firstParent);
+      const existingFirstCol = lanes.indexOf(firstParent);
 
-      lanes[column] =
-        existingFirstParentLane === -1 || existingFirstParentLane === column
-          ? firstParent
-          : null;
+      if (existingFirstCol === -1 || existingFirstCol === col) {
+        lanes[col] = firstParent;
+        laneColors[col] = colorIdx;
+      }
 
+      // Subsequent parents (branch forks) get NEW DISTINCT COLORS & LANES
       for (const parentHash of commit.parents.slice(1)) {
         if (lanes.includes(parentHash)) continue;
-        lanes[firstEmptyLane(lanes)] = parentHash;
+        const newCol = firstEmptySlot(lanes);
+        const forkColor = nextColorIndex++;
+        lanes[newCol] = parentHash;
+        laneColors[newCol] = forkColor;
       }
     }
 
     while (lanes.length > 0 && lanes.at(-1) === null) {
       lanes.pop();
+      laneColors.pop();
     }
   }
 
@@ -216,16 +236,17 @@ function renderGraph(visibleCommits) {
     rowBg.addEventListener("click", () => selectCommit(commit.hash));
     rowBgLayer.append(rowBg);
 
-    // Thick prominent branch curves
-    for (const parent of commit.parentCommits) {
+    // Thick prominent branch curves with dedicated colors per branch
+    for (const [pIdx, parent] of commit.parentCommits.entries()) {
       const toX = layout.left + parent.column * layout.laneWidth;
       const toY = layout.top + parent.row * layout.rowHeight;
+      const strokeColor = pIdx === 0 ? commit.color : parent.color;
 
       edgeLayer.append(
         createSvgNode("path", {
           d: edgePath(fromX, fromY, toX, toY),
           class: "graph-edge",
-          stroke: commit.color
+          stroke: strokeColor
         })
       );
     }
