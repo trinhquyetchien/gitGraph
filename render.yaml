@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: gitgraph
+    env: node
+    plan: free
+    region: singapore
+    buildCommand: ""
+    startCommand: "node server.mjs"
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 4173
+      - key: HOST
+        value: 0.0.0.0
